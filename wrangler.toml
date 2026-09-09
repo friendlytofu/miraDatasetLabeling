@@ -5,4 +5,4 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "mira-labeling-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "da46a620-9a3d-4d0f-8b83-4fe0a976551d"
