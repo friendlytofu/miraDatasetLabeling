@@ -133,6 +133,112 @@
             <ul id="want-list" class="item-list"></ul>
           </div>
         </div>
+
+        <div class="bank-backup">
+          <div class="bank-backup-info">
+            <span class="bank-backup-icon" aria-hidden="true">⇅</span>
+            <div>
+              <strong>Back up the item bank</strong>
+              <p class="hint compact">Save every offer and want to a file on your computer, then restore it later — after a redeploy, an update, or on another device — without retyping anything.</p>
+            </div>
+          </div>
+          <div class="bank-backup-actions">
+            <button id="backup-download-btn" class="bank-backup-btn" type="button"><span>↓ Download backup</span></button>
+            <label class="bank-backup-btn" for="backup-upload-input"><span>↑ Restore from file</span></label>
+            <input id="backup-upload-input" type="file" accept="application/json,.json" hidden />
+          </div>
+          <p id="backup-status" class="status-line" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card idea-helper-card" id="idea-helper">
+      <div class="helper-mascot-wrap">
+        <div class="helper-orbit" aria-hidden="true"></div>
+        <button type="button" class="helper-mascot" id="mascot-spark" aria-label="Give me a spark of inspiration" title="Tap for a spark of inspiration">
+          <span class="spark-float-wrap">
+            <svg viewBox="0 0 160 160" role="presentation" aria-hidden="true">
+              <defs>
+                <linearGradient id="sparkTeal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#39cbac"/>
+                  <stop offset="1" stop-color="#075e53"/>
+                </linearGradient>
+                <linearGradient id="sparkAmber" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#f4c179"/>
+                  <stop offset="1" stop-color="#c97f2c"/>
+                </linearGradient>
+                <radialGradient id="sparkBack" cx="50%" cy="40%" r="65%">
+                  <stop offset="0" stop-color="#ffffff"/>
+                  <stop offset="1" stop-color="#eef4ef"/>
+                </radialGradient>
+                <filter id="sparkShadow" x="-40%" y="-40%" width="180%" height="180%">
+                  <feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#0b5f54" flood-opacity=".22"/>
+                </filter>
+              </defs>
+              <circle cx="80" cy="80" r="72" fill="url(#sparkBack)" stroke="rgba(19,32,33,.08)" stroke-width="1.5"/>
+              <g filter="url(#sparkShadow)" class="spark-core">
+                <g class="spark-petals-major" fill="url(#sparkTeal)">
+                  <path d="M80 80 C74 56 71 32 80 6 C89 32 86 56 80 80 Z"/>
+                  <path d="M80 80 C74 56 71 32 80 6 C89 32 86 56 80 80 Z" transform="rotate(90 80 80)"/>
+                  <path d="M80 80 C74 56 71 32 80 6 C89 32 86 56 80 80 Z" transform="rotate(180 80 80)"/>
+                  <path d="M80 80 C74 56 71 32 80 6 C89 32 86 56 80 80 Z" transform="rotate(270 80 80)"/>
+                </g>
+                <g class="spark-petals-minor" fill="url(#sparkAmber)">
+                  <path d="M80 80 C76 64 74 50 80 30 C86 50 84 64 80 80 Z" transform="rotate(45 80 80)"/>
+                  <path d="M80 80 C76 64 74 50 80 30 C86 50 84 64 80 80 Z" transform="rotate(135 80 80)"/>
+                  <path d="M80 80 C76 64 74 50 80 30 C86 50 84 64 80 80 Z" transform="rotate(225 80 80)"/>
+                  <path d="M80 80 C76 64 74 50 80 30 C86 50 84 64 80 80 Z" transform="rotate(315 80 80)"/>
+                </g>
+                <circle cx="80" cy="80" r="7" fill="#0a3b36"/>
+                <circle cx="80" cy="80" r="2.6" fill="#8be6d2"/>
+              </g>
+            </svg>
+          </span>
+        </button>
+      </div>
+      <div class="helper-main">
+        <div class="card-topline"><span class="step-number helper-spark">✦</span><span>Mira Muse · idea helper</span></div>
+        <div class="helper-heading">
+          <div>
+            <h3>Stuck on the wording?</h3>
+            <p class="hint">Give Mira a topic, a half-written thought, or even just a field. She can polish it, finish it, or spin up new ideas.</p>
+          </div>
+          <div class="helper-status" id="helper-status">Ready to play</div>
+        </div>
+        <div class="helper-mode-row" role="tablist" aria-label="Idea helper mode">
+          <button class="helper-mode is-active" type="button" data-helper-mode="rephrase">Rephrase</button>
+          <button class="helper-mode" type="button" data-helper-mode="finish">Finish it</button>
+          <button class="helper-mode" type="button" data-helper-mode="brainstorm">Brainstorm</button>
+        </div>
+        <div class="helper-input-row">
+          <textarea id="helper-input" rows="2" placeholder="Try “want to find a baseball training buddy” or just “photography”"></textarea>
+          <button id="helper-go-btn" class="helper-go" type="button" aria-label="Generate ideas">↗</button>
+        </div>
+        <div class="helper-quick-row" aria-label="Use existing text">
+          <button type="button" class="helper-quick" data-helper-source="offer">Use current offer</button>
+          <button type="button" class="helper-quick" data-helper-source="want">Use current want</button>
+          <button type="button" class="helper-quick" data-helper-source="phrase">Use activity</button>
+        </div>
+        <div class="helper-import" id="helper-import">
+          <div class="helper-import-head">
+            <div>
+              <span class="helper-mini-label">IMPORT &amp; DISCOVER</span>
+              <h4>Turn a list into wants &amp; offers</h4>
+              <p class="hint compact">Drop a TXT, CSV, MD, or JSON list. Mira will detect activity-like topics and prepare editable suggestions for review.</p>
+            </div>
+            <span class="import-badge">non-destructive</span>
+          </div>
+          <label class="import-drop" id="import-drop" for="activity-file-input">
+            <input id="activity-file-input" type="file" accept=".txt,.md,.csv,.json,text/plain,text/csv,application/json,text/markdown" />
+            <span class="import-drop-icon">↥</span>
+            <span class="import-drop-title">Drop your activity list here</span>
+            <span class="import-drop-subtitle">or click to browse · no changes are saved until you approve them</span>
+          </label>
+          <div id="import-preview" class="import-preview" hidden></div>
+        </div>
+        <div id="helper-results" class="helper-results" aria-live="polite">
+          <div class="helper-empty"><span>✦</span><p>Type something above and I’ll bring back a little tray of ideas.</p></div>
+        </div>
       </div>
     </div>
   </section>

@@ -22,12 +22,15 @@ export async function onRequestPost({ request, env }) {
     if (!text || (type !== "offer" && type !== "want")) {
       return errorJson(`Each item needs non-empty text and type 'offer' or 'want'. Got: ${JSON.stringify(it)}`);
     }
+    // If a valid created_at is supplied (e.g. restoring a downloaded backup), keep it
+    // so restored items preserve their original place in history instead of looking new.
+    const createdAt = typeof it.created_at === "string" && !Number.isNaN(Date.parse(it.created_at)) ? it.created_at : now;
     const res = await env.DB.prepare(
       "INSERT INTO items (text, type, source_phrase, created_at) VALUES (?, ?, ?, ?)"
     )
-      .bind(text, type, it.source_phrase || null, now)
+      .bind(text, type, it.source_phrase || null, createdAt)
       .run();
-    created.push({ id: res.meta.last_row_id, text, type, source_phrase: it.source_phrase || null, created_at: now });
+    created.push({ id: res.meta.last_row_id, text, type, source_phrase: it.source_phrase || null, created_at: createdAt });
   }
 
   return json({ created });

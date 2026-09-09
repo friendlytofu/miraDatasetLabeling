@@ -130,3 +130,9 @@ wrangler pages dev . --d1=DB=mira-labeling-db
   a paid provider (e.g. DeepL) — the caching layer stays the same.
 - `labeled_blind` is always recorded as `true`: the labeler only ever sees
   the offer/want text, never a suggested answer.
+
+## Activity list import
+
+The Mira Muse helper can import a simple activity/topic list directly in the browser. Supported formats are TXT, Markdown, CSV, and JSON; the importer detects activity/subject/topic/skill-like values, creates paired Want and Offer drafts, and lets you review, switch type, select, and edit the generated text before explicitly adding it to the existing item bank.
+
+Imports are non-destructive: merely uploading a file does not create database records.
