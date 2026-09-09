@@ -81,6 +81,26 @@ wrangler pages dev . --d1=DB=mira-labeling-db
 - **Export** — downloads every labeled entry as a JSON array in the target
   format, with `id` renumbered sequentially from 0.
 
+## What's new in this version
+
+- **More phrasing variety** — 9 offer and 9 want templates per activity
+  instead of 3; "shuffle phrasing" now jumps to a random alternative (never
+  repeating the one you're already looking at) and shows how many variants
+  are left, e.g. `(4/9)`.
+- **Keyboard shortcuts while labeling** — press `Y` / `→` for Match and
+  `N` / `←` for No match, so you don't have to reach for the mouse between
+  every entry.
+- **Progress bar** on the Label tab, filling as you work through the queue.
+- **Mini bar chart** on the Generate tab's balance grid, so you can see the
+  1×1…3×3 distribution at a glance instead of just reading numbers.
+- **Small illustrations**: a hand-drawn offer/want icon pair (outward arrow
+  for offer, inward arrow for want) used throughout, a checkmark-clipboard
+  illustration when the label queue is empty, and a brief check/× animation
+  that flashes over the card right after you label it.
+- Subtle motion throughout (tab fades, hover states, a one-time draw-in
+  animation on the header mark) — nothing looping or distracting, and all
+  of it respects "reduce motion" system settings.
+
 ## Notes / limits
 
 - The offer/want "drafting" in **Create** is template-based, not an LLM

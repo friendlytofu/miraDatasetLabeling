@@ -38,10 +38,17 @@ function stripLeadingVerb(phrase) {
 
 function offerVariants(phrase) {
   const p = lowerFirst(stripLeadingVerb(phrase));
+  const capped = p.charAt(0).toUpperCase() + p.slice(1);
   return [
     `I can offer ${p}.`,
     `I'm happy to help with ${p}.`,
     `I have experience with ${p} and can teach it.`,
+    `I offer ${p} for anyone interested.`,
+    `${capped} is something I can share with others.`,
+    `I know ${p} well and can walk someone through it.`,
+    `Count me in to help with ${p}.`,
+    `I can put together a session on ${p}.`,
+    `Happy to run a beginner-friendly session on ${p}.`,
   ];
 }
 function wantVariants(phrase) {
@@ -50,7 +57,22 @@ function wantVariants(phrase) {
     `I want ${p}.`,
     `I'm looking for help with ${p}.`,
     `I need someone who can help me with ${p}.`,
+    `I'd love to learn more about ${p}.`,
+    `Looking for guidance on ${p}.`,
+    `I need a hand with ${p}.`,
+    `Could really use help with ${p}.`,
+    `I'm hoping to find someone who can teach me ${p}.`,
+    `Would appreciate any pointers on ${p}.`,
   ];
+}
+
+function randomIndexExcluding(length, exclude) {
+  if (length <= 1) return 0;
+  let idx;
+  do {
+    idx = Math.floor(Math.random() * length);
+  } while (idx === exclude);
+  return idx;
 }
 
 // Local ISO timestamp with the browser's own UTC offset, e.g. 2026-08-19T18:44:13.269-07:00
@@ -73,10 +95,14 @@ let wantIdx = 0;
 document.getElementById("draft-btn").addEventListener("click", () => {
   const phrase = document.getElementById("phrase-input").value.trim();
   if (!phrase) return;
-  offerIdx = 0;
-  wantIdx = 0;
-  document.getElementById("offer-text").value = offerVariants(phrase)[0];
-  document.getElementById("want-text").value = wantVariants(phrase)[0];
+  const offers = offerVariants(phrase);
+  const wants = wantVariants(phrase);
+  offerIdx = Math.floor(Math.random() * offers.length);
+  wantIdx = Math.floor(Math.random() * wants.length);
+  document.getElementById("offer-text").value = offers[offerIdx];
+  document.getElementById("want-text").value = wants[wantIdx];
+  document.getElementById("offer-variant-count").textContent = `(1/${offers.length})`;
+  document.getElementById("want-variant-count").textContent = `(1/${wants.length})`;
   document.getElementById("draft-area").hidden = false;
   document.getElementById("draft-area").dataset.phrase = phrase;
 });
@@ -84,14 +110,16 @@ document.getElementById("draft-btn").addEventListener("click", () => {
 document.getElementById("cycle-offer").addEventListener("click", () => {
   const phrase = document.getElementById("draft-area").dataset.phrase || "";
   const variants = offerVariants(phrase);
-  offerIdx = (offerIdx + 1) % variants.length;
+  offerIdx = randomIndexExcluding(variants.length, offerIdx);
   document.getElementById("offer-text").value = variants[offerIdx];
+  document.getElementById("offer-variant-count").textContent = `(${offerIdx + 1}/${variants.length})`;
 });
 document.getElementById("cycle-want").addEventListener("click", () => {
   const phrase = document.getElementById("draft-area").dataset.phrase || "";
   const variants = wantVariants(phrase);
-  wantIdx = (wantIdx + 1) % variants.length;
+  wantIdx = randomIndexExcluding(variants.length, wantIdx);
   document.getElementById("want-text").value = variants[wantIdx];
+  document.getElementById("want-variant-count").textContent = `(${wantIdx + 1}/${variants.length})`;
 });
 
 document.getElementById("save-draft-btn").addEventListener("click", async () => {
@@ -163,12 +191,16 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
 function renderBucketGrid(counts) {
   const el = document.getElementById("bucket-grid");
   el.innerHTML = "";
+  const values = [];
+  for (let o = 1; o <= 3; o++) for (let w = 1; w <= 3; w++) values.push((counts && counts[`${o}x${w}`]) || 0);
+  const max = Math.max(1, ...values);
   for (let o = 1; o <= 3; o++) {
     for (let w = 1; w <= 3; w++) {
       const key = `${o}x${w}`;
+      const n = (counts && counts[key]) || 0;
       const cell = document.createElement("div");
       cell.className = "bucket-cell";
-      cell.innerHTML = `<span class="n">${(counts && counts[key]) || 0}</span>${o} offer${o > 1 ? "s" : ""} × ${w} want${w > 1 ? "s" : ""}`;
+      cell.innerHTML = `<div class="bar" style="height:${(n / max) * 100}%"></div><span class="n">${n}</span>${o} offer${o > 1 ? "s" : ""} × ${w} want${w > 1 ? "s" : ""}`;
       el.appendChild(cell);
     }
   }
@@ -188,7 +220,10 @@ let currentEntry = null;
 
 async function loadNextEntry() {
   const { entries, counts } = await api("/entries?status=unlabeled&limit=1");
-  document.getElementById("label-progress").textContent = `${counts.unlabeled || 0} unlabeled · ${counts.total || 0} total`;
+  const total = counts.total || 0;
+  const done = total - (counts.unlabeled || 0);
+  document.getElementById("label-progress").textContent = `${counts.unlabeled || 0} unlabeled · ${total} total`;
+  document.getElementById("progress-fill").style.width = total ? `${(done / total) * 100}%` : "0%";
   if (entries.length === 0) {
     currentEntry = null;
     document.getElementById("label-card").hidden = true;
@@ -196,9 +231,12 @@ async function loadNextEntry() {
     return;
   }
   document.getElementById("label-empty").hidden = true;
-  document.getElementById("label-card").hidden = false;
+  const card = document.getElementById("label-card");
+  card.hidden = false;
+  card.classList.add("is-loading");
   currentEntry = entries[0];
   await renderEntry(currentEntry);
+  requestAnimationFrame(() => card.classList.remove("is-loading"));
 }
 
 function tokenize(text) {
@@ -279,6 +317,13 @@ async function submitLabel(label) {
     labelerInput.focus();
     return;
   }
+  const feedback = document.getElementById("label-feedback");
+  const yesIcon = document.getElementById("feedback-yes-icon");
+  const noIcon = document.getElementById("feedback-no-icon");
+  yesIcon.hidden = label !== "yes";
+  noIcon.hidden = label !== "no";
+  feedback.classList.add("is-active");
+
   await api("/label", {
     method: "POST",
     body: JSON.stringify({
@@ -288,11 +333,25 @@ async function submitLabel(label) {
       labeled_at: formatLocalISO(new Date()),
     }),
   });
-  loadNextEntry();
+
+  setTimeout(async () => {
+    await loadNextEntry();
+    feedback.classList.remove("is-active");
+  }, 300);
 }
 
 document.getElementById("label-yes").addEventListener("click", () => submitLabel("yes"));
 document.getElementById("label-no").addEventListener("click", () => submitLabel("no"));
+
+// Keyboard shortcuts while the Label tab is active: Y / Right = match, N / Left = no match.
+document.addEventListener("keydown", (e) => {
+  const labelPanelActive = document.getElementById("panel-label").classList.contains("is-active");
+  if (!labelPanelActive || !currentEntry) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.key === "y" || e.key === "Y" || e.key === "ArrowRight") submitLabel("yes");
+  if (e.key === "n" || e.key === "N" || e.key === "ArrowLeft") submitLabel("no");
+});
 
 // ---------- EXPORT panel ----------
 async function loadExportStats() {
