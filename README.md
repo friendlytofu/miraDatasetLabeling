@@ -9,6 +9,25 @@ and export in the exact training-data JSON format.
 Static frontend (`index.html`, `style.css`, `app.js`) + Cloudflare Pages
 Functions (`/functions/api/*`) + a Cloudflare D1 database for storage.
 
+## Access password
+
+The whole app (pages *and* the `/api/*` routes) sits behind a shared
+password, enforced server-side in `functions/_middleware.js` — not just a
+client-side popup. The default password is **`mira`**.
+
+To change it, set a `MIRA_PASSWORD` environment variable/secret on the
+Pages project (Settings → Environment variables) instead of editing the
+code:
+
+```bash
+wrangler pages secret put MIRA_PASSWORD
+```
+
+If `MIRA_PASSWORD` isn't set, it falls back to `mira`. Visiting the site
+redirects to `/login.html`; a correct password sets an `HttpOnly` session
+cookie (valid 30 days) via `POST /api/login`. `POST /api/logout` clears it
+— there's a "Log out" button in the header.
+
 ## 1. Create the D1 database
 
 ```bash

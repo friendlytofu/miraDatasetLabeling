@@ -1,3 +1,13 @@
+// ---------- logout ----------
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } catch {
+    // ignore network errors, still send them to the login page
+  }
+  window.location.href = "/login.html";
+});
+
 // ---------- tab switching ----------
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
