@@ -3,208 +3,56 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0d1516" />
 <title>Sign in · Mira Dataset Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --ink: #12181C;
-    --ink-soft: #4A555C;
-    --muted: #8A939A;
-    --card: #FFFFFF;
-    --line: #DEE3DF;
-    --teal: #0E8C79;
-    --teal-deep: #0B5C50;
-    --teal-tint: #E1F1EC;
-    --red: #D5492E;
-    --red-tint: #FBE6E0;
-    --font-ui: "Inter", system-ui, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
-    font-family: var(--font-ui);
-    color: var(--ink);
-    background:
-      radial-gradient(circle at 15% 10%, rgba(14,140,121,0.18), transparent 45%),
-      radial-gradient(circle at 85% 90%, rgba(221,138,46,0.14), transparent 45%),
-      linear-gradient(180deg, #0D1417 0%, #10171B 100%);
-  }
-  .panel {
-    width: 100%;
-    max-width: 380px;
-    background: var(--card);
-    border-radius: 16px;
-    padding: 2.25rem 2rem 2rem;
-    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55);
-    animation: rise 0.4s cubic-bezier(.2,.9,.3,1) both;
-  }
-  @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
-
-  .mark {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: linear-gradient(150deg, #17B39B, var(--teal-deep));
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 1.1rem;
-    box-shadow: 0 6px 16px -6px rgba(14, 140, 121, 0.6);
-  }
-  .mark svg { width: 20px; height: 8px; color: #ECFBF7; }
-
-  h1 { font-weight: 600; font-size: 1.3rem; margin: 0 0 0.3rem; letter-spacing: -0.015em; }
-  .sub { color: var(--muted); font-size: 0.87rem; margin: 0 0 1.6rem; line-height: 1.5; }
-
-  label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 0.4rem; }
-  .pw-row { position: relative; }
-  input[type="password"], input[type="text"] {
-    width: 100%;
-    font-family: var(--font-ui);
-    font-size: 0.96rem;
-    padding: 0.68rem 2.6rem 0.68rem 0.85rem;
-    border: 1.5px solid var(--line);
-    border-radius: 9px;
-    background: #FAFBFA;
-    color: var(--ink);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-  input:focus {
-    outline: none;
-    border-color: var(--teal);
-    box-shadow: 0 0 0 3px var(--teal-tint);
-  }
-  .toggle-pw {
-    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
-    background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 0.74rem; font-weight: 600; padding: 0.2rem 0.35rem;
-  }
-  .toggle-pw:hover { color: var(--ink-soft); }
-
-  button.submit {
-    width: 100%;
-    margin-top: 1.25rem;
-    font-family: var(--font-ui);
-    font-weight: 600;
-    font-size: 0.94rem;
-    padding: 0.72rem 1rem;
-    border-radius: 9px;
-    border: none;
-    background: var(--teal-deep);
-    color: #F1FAF8;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
-  }
-  button.submit:hover { background: #094A40; }
-  button.submit:active { transform: translateY(1px) scale(0.99); }
-  button.submit:disabled { opacity: 0.6; cursor: default; }
-
-  .error {
-    display: none;
-    margin-top: 0.9rem;
-    font-size: 0.84rem;
-    color: var(--red);
-    background: var(--red-tint);
-    border: 1px solid rgba(213,73,46,0.2);
-    border-radius: 8px;
-    padding: 0.55rem 0.75rem;
-  }
-  .error.is-visible { display: block; animation: shake 0.32s ease; }
-  @keyframes shake {
-    10%, 90% { transform: translateX(-1px); }
-    20%, 80% { transform: translateX(2px); }
-    30%, 50%, 70% { transform: translateX(-4px); }
-    40%, 60% { transform: translateX(4px); }
-  }
-
-  .footnote { margin-top: 1.5rem; font-size: 0.74rem; color: var(--muted); text-align: center; }
+:root{--ink:#142120;--muted:#8fa09d;--teal:#29b79a;--teal-deep:#075b50;--line:rgba(20,33,32,.12);--red:#b9503d;--red-tint:#fae3de;--ui:"Inter",system-ui,sans-serif;--display:"DM Serif Display",Georgia,serif}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px;overflow:hidden;color:#eef7f4;font-family:var(--ui);background:radial-gradient(circle at 18% 14%,rgba(41,183,154,.18),transparent 34%),radial-gradient(circle at 82% 82%,rgba(224,148,67,.15),transparent 31%),linear-gradient(145deg,#091313,#10201f 55%,#08100f)}
+.ambient{position:fixed;width:360px;height:360px;border-radius:50%;filter:blur(80px);opacity:.22;pointer-events:none}.a{left:-180px;top:52%}.b{right:-170px;top:-100px}
+.shell{width:min(100%,980px);display:grid;grid-template-columns:1.05fr .95fr;border:1px solid rgba(255,255,255,.09);border-radius:30px;overflow:hidden;background:rgba(16,31,30,.72);box-shadow:0 40px 100px rgba(0,0,0,.45);backdrop-filter:blur(20px)}
+.story{position:relative;padding:46px;display:flex;flex-direction:column;justify-content:space-between;min-height:560px;border-right:1px solid rgba(255,255,255,.07);background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.005))}
+.story-mark{width:46px;height:46px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,#34cfb0,#07564c);box-shadow:0 16px 34px -18px rgba(52,207,176,.75)}.story-mark svg{width:25px;color:#eafff9}.eyebrow{margin-top:18px;font-size:.65rem;font-weight:700;letter-spacing:.18em;color:#6f8782}.story h1{margin:7px 0 13px;max-width:10ch;font:400 clamp(3rem,6vw,5rem)/.93 var(--display);letter-spacing:-.035em}.story p{max-width:42ch;color:#9cafab;font-size:.82rem;line-height:1.75}.story-footer{display:flex;gap:8px;align-items:center;color:#748985;font-size:.68rem}.signal{width:7px;height:7px;border-radius:50%;background:#35c5a2;box-shadow:0 0 0 5px rgba(53,197,162,.08)}
+.form-pane{display:flex;align-items:center;padding:46px;background:#f7f8f4;color:var(--ink)}.panel{width:100%}.panel-top{margin-bottom:28px}.panel-kicker{color:#2d8275;font-size:.63rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase}.panel h2{margin:5px 0 5px;font:400 clamp(2rem,4vw,2.75rem)/1 var(--display)}.panel-sub{color:#8a9695;font-size:.78rem;line-height:1.65}.field-label{display:block;margin:0 0 7px;color:#657473;font-size:.72rem;font-weight:700}.pw-row{position:relative}.pw-row input{width:100%;padding:13px 48px 13px 14px;border:1px solid var(--line);border-radius:13px;background:#fff;color:var(--ink);font-size:.9rem;outline:none;transition:.16s ease}.pw-row input:focus{border-color:rgba(41,183,154,.7);box-shadow:0 0 0 4px rgba(41,183,154,.11)}.toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#73827f;font-size:.68rem;font-weight:700;padding:6px;border-radius:8px;cursor:pointer}.toggle:hover{color:var(--teal-deep);background:#edf6f2}
+.submit{position:relative;width:100%;margin-top:15px;padding:13px 15px;border:0;border-radius:13px;background:linear-gradient(145deg,#0a6c5d,#064c43);color:#effcf8;font-weight:750;font-size:.83rem;cursor:pointer;box-shadow:0 16px 28px -19px rgba(6,76,67,.9);transition:.16s ease}.submit:hover{transform:translateY(-1px);box-shadow:0 18px 32px -18px rgba(6,76,67,.95)}.submit:disabled{opacity:.55;transform:none;cursor:default}.error{display:none;margin:12px 0 0;padding:10px 11px;border:1px solid rgba(185,80,61,.17);border-radius:11px;background:var(--red-tint);color:var(--red);font-size:.72rem;line-height:1.45}.error.is-visible{display:block;animation:shake .3s ease}.footnote{margin-top:20px;color:#9aa5a3;text-align:center;font-size:.66rem}
+.loading{display:inline-flex;align-items:center;gap:7px}.spinner{width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+@media(max-width:760px){.shell{grid-template-columns:1fr}.story{min-height:auto;padding:30px}.story h1{max-width:none;font-size:3.25rem}.story-footer{margin-top:32px}.form-pane{padding:30px}.story{border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
-  <form class="panel" id="login-form" autocomplete="off">
-    <div class="mark" aria-hidden="true">
-      <svg viewBox="0 0 64 24" fill="none">
-        <path d="M0 12 L10 12 L14 4 L20 20 L26 8 L30 16 L34 12 L64 12" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+<div class="ambient a"></div><div class="ambient b"></div>
+<div class="shell">
+  <section class="story">
+    <div>
+      <div class="story-mark" aria-hidden="true"><svg viewBox="0 0 64 24" fill="none"><path d="M0 12 L10 12 L14 4 L20 20 L26 8 L30 16 L34 12 L64 12" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="eyebrow">Mira / Dataset Lab</div>
+      <h1>Make every match count.</h1>
+      <p>A focused workspace for building clean offer/want data, balancing combinations, and turning human judgment into training signal.</p>
     </div>
-    <h1>Mira Dataset Studio</h1>
-    <p class="sub">This is an internal labeling tool. Enter the access password to continue.</p>
-
-    <label for="password">Password</label>
-    <div class="pw-row">
-      <input id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" autofocus required />
-      <button type="button" class="toggle-pw" id="toggle-pw">Show</button>
-    </div>
-
-    <button type="submit" class="submit" id="submit-btn">Continue</button>
-    <p class="error" id="error-msg"></p>
-    <p class="footnote">Access is restricted to authorized labelers.</p>
-  </form>
-
+    <div class="story-footer"><span class="signal"></span> Secure internal workspace</div>
+  </section>
+  <section class="form-pane">
+    <form class="panel" id="login-form" autocomplete="on">
+      <div class="panel-top"><div class="panel-kicker">Authorized access</div><h2>Welcome back.</h2><p class="panel-sub">Enter the shared access password to continue to Mira Dataset Studio.</p></div>
+      <label class="field-label" for="password">Password</label>
+      <div class="pw-row"><input id="password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" autofocus required><button class="toggle" type="button" id="toggle-pw" aria-label="Show password">Show</button></div>
+      <button class="submit" type="submit" id="submit-btn"><span class="submit-label">Continue</span></button>
+      <p class="error" id="error-msg" role="alert"></p>
+      <p class="footnote">Your session is protected with an HttpOnly cookie.</p>
+    </form>
+  </section>
+</div>
 <script>
-  const form = document.getElementById("login-form");
-  const pwInput = document.getElementById("password");
-  const toggleBtn = document.getElementById("toggle-pw");
-  const errorMsg = document.getElementById("error-msg");
-  const submitBtn = document.getElementById("submit-btn");
-
-  toggleBtn.addEventListener("click", () => {
-    const showing = pwInput.type === "text";
-    pwInput.type = showing ? "password" : "text";
-    toggleBtn.textContent = showing ? "Show" : "Hide";
-  });
-
-  function showError(text) {
-    errorMsg.textContent = text;
-    errorMsg.classList.add("is-visible");
-  }
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    errorMsg.classList.remove("is-visible");
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Checking…";
-
-    // Trim accidental whitespace from paste/autofill — the most common
-    // reason a correct-looking password gets rejected.
-    const password = pwInput.value.trim();
-
-    try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        cache: "no-store",
-        body: JSON.stringify({ password }),
-      });
-
-      if (res.ok) {
-        const params = new URLSearchParams(window.location.search);
-        const next = params.get("next") || "/";
-        window.location.href = next;
-        return;
-      }
-
-      if (res.status === 401) {
-        showError("Incorrect password — please try again.");
-      } else {
-        // Something other than a bad password: a stale/misconfigured
-        // deployment, missing Function, etc. Surface the status so it's
-        // diagnosable instead of looking like a typo.
-        showError(`Sign-in failed (server responded ${res.status}). The deployment may need attention.`);
-      }
-      pwInput.value = "";
-      pwInput.focus();
-    } catch (err) {
-      showError("Couldn't reach the server. Check your connection and try again.");
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Continue";
-    }
-  });
+const form=document.getElementById("login-form");const input=document.getElementById("password");const toggle=document.getElementById("toggle-pw");const submit=document.getElementById("submit-btn");const label=submit.querySelector(".submit-label");const error=document.getElementById("error-msg");
+toggle.addEventListener("click",()=>{const visible=input.type==="text";input.type=visible?"password":"text";toggle.textContent=visible?"Show":"Hide";toggle.setAttribute("aria-label",visible?"Show password":"Hide password");input.focus()});
+function safeNext(){const next=new URLSearchParams(location.search).get("next");return next&&next.startsWith("/")&&!next.startsWith("//")&&!next.includes("\\")?next:"/"}
+function showError(message){error.textContent=message;error.classList.add("is-visible")}
+form.addEventListener("submit",async e=>{e.preventDefault();error.classList.remove("is-visible");const password=input.value.trim();if(!password){showError("Enter your password to continue.");input.focus();return}submit.disabled=true;label.innerHTML='<span class="loading"><span class="spinner"></span> Checking…</span>';
+try{const res=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({password})});const data=await res.json().catch(()=>({}));if(res.ok){window.location.replace(safeNext());return}showError(res.status===401?"Incorrect password — please try again.":data.error||`Sign-in failed (${res.status}).`);input.value="";input.focus()}catch{showError("Couldn't reach the sign-in service. Check your connection and try again.")}finally{submit.disabled=false;label.textContent="Continue"}});
 </script>
 </body>
 </html>

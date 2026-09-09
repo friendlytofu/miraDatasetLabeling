@@ -3,12 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0d1516" />
+<meta name="description" content="Mira Dataset Studio — create, generate, label and export matching data." />
 <title>Mira Dataset Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<div class="ambient ambient-a" aria-hidden="true"></div>
+<div class="ambient ambient-b" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
 
 <header class="site-header">
   <div class="header-inner">
@@ -19,10 +25,11 @@
         </svg>
       </div>
       <div>
+        <div class="brand-eyebrow">MIRA / DATASET LAB</div>
         <h1>Mira Dataset Studio</h1>
-        <p class="tagline">Build, generate and label offer &amp; want combinations for the matching model</p>
       </div>
     </div>
+
     <nav class="tabs" role="tablist" aria-label="Sections">
       <div class="tab-indicator" id="tab-indicator" aria-hidden="true"></div>
       <button class="tab-btn is-active" data-tab="create" role="tab" aria-selected="true">Create</button>
@@ -30,57 +37,99 @@
       <button class="tab-btn" data-tab="label" role="tab" aria-selected="false">Label</button>
       <button class="tab-btn" data-tab="export" role="tab" aria-selected="false">Export</button>
     </nav>
+
     <div class="header-actions">
+      <div class="session-pill"><span class="status-dot"></span> Secure session</div>
       <button id="logout-btn" class="logout-btn" type="button">Log out</button>
     </div>
   </div>
 </header>
 
 <main class="content">
+  <section class="hero-strip" aria-label="Workspace overview">
+    <div>
+      <span class="hero-kicker">BUILD BETTER MATCHING DATA</span>
+      <h2>Shape the signal behind Mira.</h2>
+      <p>Create clean language pairs, generate balanced combinations, and label them with as little friction as possible.</p>
+    </div>
+    <div class="hero-metrics" id="workspace-metrics">
+      <div><span class="metric-value" id="metric-offers">—</span><span class="metric-label">offers</span></div>
+      <div><span class="metric-value" id="metric-wants">—</span><span class="metric-label">wants</span></div>
+      <div><span class="metric-value" id="metric-unlabeled">—</span><span class="metric-label">to label</span></div>
+    </div>
+  </section>
 
   <!-- CREATE -->
-  <section id="panel-create" class="panel is-active" role="tabpanel">
+  <section id="panel-create" class="panel is-active" role="tabpanel" aria-labelledby="tab-create">
+    <div class="section-heading">
+      <div>
+        <span class="section-kicker">01 · BUILD THE BANK</span>
+        <h2>Turn an activity into useful language.</h2>
+        <p>Draft an offer and a want from a plain-language activity, then tune the wording before it enters the bank.</p>
+      </div>
+      <div class="section-badge">Fast drafting · 9 variants each</div>
+    </div>
+
     <div class="panel-grid">
-      <div class="card">
-        <h2>Describe an activity</h2>
-        <p class="hint">Type a skill or activity in plain language. Mira will draft an offer and a want version — edit either before saving.</p>
+      <div class="card feature-card">
+        <div class="card-topline"><span class="step-number">01</span><span>Drafting desk</span></div>
+        <h3>Describe an activity</h3>
+        <p class="hint">Use a concrete skill, class, service, or activity. The fastest results come from short, natural phrases.</p>
         <label class="field">
           <span>Activity or skill</span>
-          <input id="phrase-input" type="text" placeholder="e.g. organic chemistry tutoring, golf training class, crochet pattern teaching" />
+          <div class="input-with-action">
+            <input id="phrase-input" type="text" autocomplete="off" placeholder="e.g. organic chemistry tutoring" />
+            <button id="clear-phrase-btn" class="icon-btn" type="button" aria-label="Clear activity">×</button>
+          </div>
         </label>
-        <button id="draft-btn" class="btn btn-primary">Draft offer &amp; want</button>
+        <div class="suggestions" aria-label="Activity examples">
+          <button type="button" class="suggestion-chip" data-phrase="organic chemistry tutoring">chemistry tutoring</button>
+          <button type="button" class="suggestion-chip" data-phrase="beginner pottery class">pottery class</button>
+          <button type="button" class="suggestion-chip" data-phrase="golf training session">golf training</button>
+        </div>
+        <button id="draft-btn" class="btn btn-primary btn-wide" type="button"><span>Draft offer &amp; want</span><span class="btn-arrow">↗</span></button>
 
         <div id="draft-area" class="draft-area" hidden>
-          <div class="draft-col">
+          <div class="draft-col draft-col-offer">
             <div class="draft-head">
-              <span class="chip chip-offer"><svg class="chip-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 11V5M5.5 7.5 8 5l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Offer</span>
-              <button class="btn-text" id="cycle-offer">shuffle phrasing <span id="offer-variant-count" class="variant-count"></span></button>
+              <span class="chip chip-offer">Offer</span>
+              <button class="btn-text" id="cycle-offer" type="button">shuffle <span id="offer-variant-count" class="variant-count"></span></button>
             </div>
-            <textarea id="offer-text" rows="2"></textarea>
+            <textarea id="offer-text" rows="3" aria-label="Offer text"></textarea>
             <label class="checkbox"><input type="checkbox" id="offer-include" checked /> add to item bank</label>
           </div>
-          <div class="draft-col">
+          <div class="draft-divider" aria-hidden="true"></div>
+          <div class="draft-col draft-col-want">
             <div class="draft-head">
-              <span class="chip chip-want"><svg class="chip-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5.5 8.5 8 11l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Want</span>
-              <button class="btn-text" id="cycle-want">shuffle phrasing <span id="want-variant-count" class="variant-count"></span></button>
+              <span class="chip chip-want">Want</span>
+              <button class="btn-text" id="cycle-want" type="button">shuffle <span id="want-variant-count" class="variant-count"></span></button>
             </div>
-            <textarea id="want-text" rows="2"></textarea>
+            <textarea id="want-text" rows="3" aria-label="Want text"></textarea>
             <label class="checkbox"><input type="checkbox" id="want-include" checked /> add to item bank</label>
           </div>
-          <button id="save-draft-btn" class="btn btn-primary save-draft-btn">Save to bank</button>
+          <button id="save-draft-btn" class="btn btn-primary save-draft-btn" type="button"><span>Save to bank</span><span class="btn-arrow">↓</span></button>
         </div>
         <p id="create-status" class="status-line" aria-live="polite"></p>
       </div>
 
-      <div class="card">
-        <h2>Item bank</h2>
-        <div class="bank-columns">
+      <div class="card bank-card">
+        <div class="card-topline"><span class="step-number">02</span><span>Live item bank</span></div>
+        <div class="bank-head">
           <div>
-            <h3>Offers <span id="offer-count" class="count-badge">0</span></h3>
+            <h3>What Mira can draw from</h3>
+            <p class="hint compact">Fresh items make better combinations. Keep both sides growing.</p>
+          </div>
+          <button id="refresh-items-btn" class="icon-btn refresh-btn" type="button" aria-label="Refresh item bank">↻</button>
+        </div>
+        <div class="bank-columns">
+          <div class="bank-side offer-side">
+            <h4>Offers <span id="offer-count" class="count-badge">0</span></h4>
+            <div class="bank-meter"><span id="offer-meter-fill" style="width:0%"></span></div>
             <ul id="offer-list" class="item-list"></ul>
           </div>
-          <div>
-            <h3>Wants <span id="want-count" class="count-badge">0</span></h3>
+          <div class="bank-side want-side">
+            <h4>Wants <span id="want-count" class="count-badge">0</span></h4>
+            <div class="bank-meter"><span id="want-meter-fill" style="width:0%"></span></div>
             <ul id="want-list" class="item-list"></ul>
           </div>
         </div>
@@ -89,49 +138,81 @@
   </section>
 
   <!-- GENERATE -->
-  <section id="panel-generate" class="panel" role="tabpanel">
-    <div class="panel-grid">
-      <div class="card">
-        <h2>Generate combinations</h2>
-        <p class="hint">Draws 1–3 offers with 1–3 wants from the item bank, balanced across all nine size combinations, with no repeated combination.</p>
+  <section id="panel-generate" class="panel" role="tabpanel" aria-labelledby="tab-generate">
+    <div class="section-heading">
+      <div>
+        <span class="section-kicker">02 · COMPOSE THE QUEUE</span>
+        <h2>Generate a balanced set of combinations.</h2>
+        <p>Mira rotates through the 1×1 → 3×3 size buckets and skips exact duplicates already in the database.</p>
+      </div>
+      <div class="section-badge">No repeated combo keys</div>
+    </div>
+    <div class="panel-grid generate-grid">
+      <div class="card feature-card">
+        <div class="card-topline"><span class="step-number">03</span><span>Combination engine</span></div>
+        <h3>How much signal do you need?</h3>
+        <p class="hint">Start with a focused batch while you are iterating. You can always generate more later.</p>
         <label class="field">
-          <span>How many combinations to generate</span>
-          <input id="gen-count" type="number" min="1" max="1000" value="30" />
+          <span>Combinations to generate</span>
+          <div class="number-control">
+            <button type="button" class="stepper-btn" data-step-target="gen-count" data-step="-10" aria-label="Decrease by ten">−</button>
+            <input id="gen-count" type="number" min="1" max="1000" value="30" inputmode="numeric" />
+            <button type="button" class="stepper-btn" data-step-target="gen-count" data-step="10" aria-label="Increase by ten">+</button>
+          </div>
         </label>
-        <button id="generate-btn" class="btn btn-primary">Generate</button>
+        <div class="preset-row" aria-label="Generation presets">
+          <button class="preset-btn" type="button" data-count="12">12</button>
+          <button class="preset-btn" type="button" data-count="30">30</button>
+          <button class="preset-btn" type="button" data-count="60">60</button>
+          <button class="preset-btn" type="button" data-count="120">120</button>
+        </div>
+        <button id="generate-btn" class="btn btn-primary btn-wide" type="button"><span>Generate combinations</span><span class="btn-arrow">✦</span></button>
         <p id="generate-status" class="status-line" aria-live="polite"></p>
       </div>
-      <div class="card">
-        <h2>Balance by size</h2>
-        <p class="hint">offers × wants, this run</p>
+      <div class="card balance-card">
+        <div class="card-topline"><span class="step-number">04</span><span>Live balance</span></div>
+        <div class="balance-header">
+          <div>
+            <h3>Shape of this run</h3>
+            <p class="hint compact">Offers × wants, generated in this batch.</p>
+          </div>
+          <div class="balance-total"><span id="generated-total">0</span><small>new</small></div>
+        </div>
         <div id="bucket-grid" class="bucket-grid"></div>
       </div>
     </div>
   </section>
 
   <!-- LABEL -->
-  <section id="panel-label" class="panel" role="tabpanel">
+  <section id="panel-label" class="panel" role="tabpanel" aria-labelledby="tab-label">
+    <div class="section-heading">
+      <div>
+        <span class="section-kicker">03 · HUMAN JUDGMENT</span>
+        <h2>Make the match decision fast.</h2>
+        <p>Read the offer and want language side by side. Shared wording is highlighted automatically to speed up review.</p>
+      </div>
+      <div class="shortcut-legend"><kbd>Y</kbd> Match <span>or</span> <kbd>N</kbd> No match</div>
+    </div>
+
     <div class="label-toolbar">
       <label class="field field-inline">
         <span>Labeler</span>
-        <input id="labeler-name" type="text" placeholder="Your name" />
+        <input id="labeler-name" type="text" placeholder="Your name" autocomplete="name" />
       </label>
-      <label class="checkbox">
+      <label class="checkbox toggle-line">
         <input type="checkbox" id="translate-toggle" checked /> show Chinese translations
       </label>
       <div class="progress-wrap">
-        <div id="label-progress" class="progress-line"></div>
+        <div id="label-progress" class="progress-line">0 unlabeled · 0 total</div>
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
       </div>
     </div>
 
     <div id="label-empty" class="card empty-state" hidden>
-      <svg viewBox="0 0 80 80" width="72" height="72" aria-hidden="true" class="empty-illustration">
-        <rect x="18" y="10" width="44" height="60" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
-        <rect x="30" y="6" width="20" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-        <path d="M28 40 L37 49 L54 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <p>No unlabeled combinations left. Generate more from the Generate tab.</p>
+      <div class="empty-orbit" aria-hidden="true"><span>✓</span></div>
+      <span class="section-kicker">QUEUE CLEAR</span>
+      <h3>Nothing waiting for a label.</h3>
+      <p>Generate another batch to keep the review loop moving.</p>
     </div>
 
     <div id="label-card" class="card entry-card" hidden>
@@ -145,49 +226,60 @@
           <path d="M23 23 L41 41 M41 23 L23 41" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
         </svg>
       </div>
+      <div class="entry-headline"><span class="live-dot"></span> Live review <span id="entry-index-label">Next</span></div>
       <div class="entry-columns">
         <div>
-          <h3 class="chip chip-offer"><svg class="chip-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 11V5M5.5 7.5 8 5l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Offers</h3>
+          <h3 class="chip chip-offer">Offers</h3>
           <div id="entry-offers" class="entry-items"></div>
         </div>
         <div>
-          <h3 class="chip chip-want"><svg class="chip-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5.5 8.5 8 11l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Wants</h3>
+          <h3 class="chip chip-want">Wants</h3>
           <div id="entry-wants" class="entry-items"></div>
         </div>
       </div>
       <div class="label-actions">
-        <button id="label-no" class="btn btn-no">No match <span class="key-hint">N</span></button>
-        <button id="label-yes" class="btn btn-yes">Match <span class="key-hint">Y</span></button>
+        <button id="label-no" class="btn btn-no" type="button">No match <span class="key-hint">N</span></button>
+        <button id="label-yes" class="btn btn-yes" type="button">Match <span class="key-hint">Y</span></button>
       </div>
     </div>
   </section>
 
   <!-- EXPORT -->
-  <section id="panel-export" class="panel" role="tabpanel">
-    <div class="panel-grid">
-      <div class="card">
-        <h2>Export labeled dataset</h2>
+  <section id="panel-export" class="panel" role="tabpanel" aria-labelledby="tab-export">
+    <div class="section-heading">
+      <div>
+        <span class="section-kicker">04 · SHIP THE DATA</span>
+        <h2>Export the labeled dataset when the batch is ready.</h2>
+        <p>Download the exact JSON structure used by the training pipeline, with labels ordered by their saved timestamps.</p>
+      </div>
+      <div class="section-badge">JSON · sequential IDs</div>
+    </div>
+    <div class="panel-grid export-grid">
+      <div class="card feature-card">
+        <div class="card-topline"><span class="step-number">05</span><span>Release package</span></div>
+        <h3>Dataset snapshot</h3>
         <div id="export-stats" class="export-stats"></div>
-        <button id="export-btn" class="btn btn-primary">Download JSON</button>
+        <div class="export-callout"><span>✓</span><div><strong>Blind labeling preserved</strong><p>Exports retain the stored decision and labeler metadata without exposing a suggested answer during review.</p></div></div>
+        <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Download JSON</span><span class="btn-arrow">↓</span></button>
         <p id="export-status" class="status-line" aria-live="polite"></p>
       </div>
-      <div class="card">
-        <h2>Format preview</h2>
-        <pre id="export-preview" class="preview-block">{
+      <div class="card preview-card">
+        <div class="card-topline"><span class="step-number">06</span><span>Format preview</span></div>
+        <div class="preview-window"><div class="window-dots"><i></i><i></i><i></i><span>dataset.json</span></div><pre id="export-preview" class="preview-block">{
   "id": 0,
-  "offers": ["..."],
-  "wants": ["..."],
+  "offers": ["…"],
+  "wants": ["…"],
   "human_label": "yes",
   "labeler": "…",
   "labeled_blind": true,
   "labeled_at": "2026-08-19T18:44:13.269-07:00"
-}</pre>
+}</pre></div>
       </div>
     </div>
   </section>
-
 </main>
 
+<div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 <script src="app.js"></script>
 </body>
 </html>

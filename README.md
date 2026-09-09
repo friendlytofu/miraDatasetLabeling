@@ -13,7 +13,7 @@ Functions (`/functions/api/*`) + a Cloudflare D1 database for storage.
 
 The whole app (pages *and* the `/api/*` routes) sits behind a shared
 password, enforced server-side in `functions/_middleware.js` — not just a
-client-side popup. The default password is **`mira`**.
+client-side popup. Session cookies are signed, random, time-bounded bearer tokens. The default password is **`mira`**.
 
 To change it, set a `MIRA_PASSWORD` environment variable/secret on the
 Pages project (Settings → Environment variables) instead of editing the
