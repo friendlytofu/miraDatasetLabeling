@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mira Dataset Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 24" width="64" height="24" aria-hidden="true">
+        <path d="M0 12 L10 12 L14 4 L20 20 L26 8 L30 16 L34 12 L64 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <h1>Mira Dataset Studio</h1>
+        <p class="tagline">Build, generate and label offer &amp; want combinations for the matching model</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab-btn is-active" data-tab="create" role="tab" aria-selected="true">Create</button>
+      <button class="tab-btn" data-tab="generate" role="tab" aria-selected="false">Generate</button>
+      <button class="tab-btn" data-tab="label" role="tab" aria-selected="false">Label</button>
+      <button class="tab-btn" data-tab="export" role="tab" aria-selected="false">Export</button>
+    </nav>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- CREATE -->
+  <section id="panel-create" class="panel is-active" role="tabpanel">
+    <div class="panel-grid">
+      <div class="card">
+        <h2>Describe an activity</h2>
+        <p class="hint">Type a skill or activity in plain language. Mira will draft an offer and a want version — edit either before saving.</p>
+        <label class="field">
+          <span>Activity or skill</span>
+          <input id="phrase-input" type="text" placeholder="e.g. organic chemistry tutoring, golf training class, crochet pattern teaching" />
+        </label>
+        <button id="draft-btn" class="btn btn-primary">Draft offer &amp; want</button>
+
+        <div id="draft-area" class="draft-area" hidden>
+          <div class="draft-col">
+            <div class="draft-head">
+              <span class="chip chip-offer">Offer</span>
+              <button class="btn-text" id="cycle-offer">try another phrasing</button>
+            </div>
+            <textarea id="offer-text" rows="2"></textarea>
+            <label class="checkbox"><input type="checkbox" id="offer-include" checked /> add to item bank</label>
+          </div>
+          <div class="draft-col">
+            <div class="draft-head">
+              <span class="chip chip-want">Want</span>
+              <button class="btn-text" id="cycle-want">try another phrasing</button>
+            </div>
+            <textarea id="want-text" rows="2"></textarea>
+            <label class="checkbox"><input type="checkbox" id="want-include" checked /> add to item bank</label>
+          </div>
+          <button id="save-draft-btn" class="btn btn-primary save-draft-btn">Save to bank</button>
+        </div>
+        <p id="create-status" class="status-line" aria-live="polite"></p>
+      </div>
+
+      <div class="card">
+        <h2>Item bank</h2>
+        <div class="bank-columns">
+          <div>
+            <h3>Offers <span id="offer-count" class="count-badge">0</span></h3>
+            <ul id="offer-list" class="item-list"></ul>
+          </div>
+          <div>
+            <h3>Wants <span id="want-count" class="count-badge">0</span></h3>
+            <ul id="want-list" class="item-list"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GENERATE -->
+  <section id="panel-generate" class="panel" role="tabpanel">
+    <div class="panel-grid">
+      <div class="card">
+        <h2>Generate combinations</h2>
+        <p class="hint">Draws 1–3 offers with 1–3 wants from the item bank, balanced across all nine size combinations, with no repeated combination.</p>
+        <label class="field">
+          <span>How many combinations to generate</span>
+          <input id="gen-count" type="number" min="1" max="1000" value="30" />
+        </label>
+        <button id="generate-btn" class="btn btn-primary">Generate</button>
+        <p id="generate-status" class="status-line" aria-live="polite"></p>
+      </div>
+      <div class="card">
+        <h2>Balance by size</h2>
+        <p class="hint">offers × wants, this run</p>
+        <div id="bucket-grid" class="bucket-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LABEL -->
+  <section id="panel-label" class="panel" role="tabpanel">
+    <div class="label-toolbar">
+      <label class="field field-inline">
+        <span>Labeler</span>
+        <input id="labeler-name" type="text" placeholder="Your name" />
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="translate-toggle" checked /> show Chinese translations
+      </label>
+      <div id="label-progress" class="progress-line"></div>
+    </div>
+
+    <div id="label-empty" class="card empty-state" hidden>
+      <p>No unlabeled combinations left. Generate more from the Generate tab.</p>
+    </div>
+
+    <div id="label-card" class="card entry-card" hidden>
+      <div class="entry-columns">
+        <div>
+          <h3 class="chip chip-offer">Offers</h3>
+          <div id="entry-offers" class="entry-items"></div>
+        </div>
+        <div>
+          <h3 class="chip chip-want">Wants</h3>
+          <div id="entry-wants" class="entry-items"></div>
+        </div>
+      </div>
+      <div class="label-actions">
+        <button id="label-no" class="btn btn-no">No match</button>
+        <button id="label-yes" class="btn btn-yes">Match</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXPORT -->
+  <section id="panel-export" class="panel" role="tabpanel">
+    <div class="panel-grid">
+      <div class="card">
+        <h2>Export labeled dataset</h2>
+        <div id="export-stats" class="export-stats"></div>
+        <button id="export-btn" class="btn btn-primary">Download JSON</button>
+        <p id="export-status" class="status-line" aria-live="polite"></p>
+      </div>
+      <div class="card">
+        <h2>Format preview</h2>
+        <pre id="export-preview" class="preview-block">{
+  "id": 0,
+  "offers": ["..."],
+  "wants": ["..."],
+  "human_label": "yes",
+  "labeler": "…",
+  "labeled_blind": true,
+  "labeled_at": "2026-08-19T18:44:13.269-07:00"
+}</pre>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

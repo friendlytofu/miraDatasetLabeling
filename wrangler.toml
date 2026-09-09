@@ -1,0 +1,8 @@
+name = "mira-labeling"
+pages_build_output_dir = "."
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mira-labeling-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
