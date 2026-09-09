@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mira Dataset Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,15 +13,18 @@
 <header class="site-header">
   <div class="header-inner">
     <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 64 24" width="64" height="24" aria-hidden="true">
-        <path d="M0 12 L10 12 L14 4 L20 20 L26 8 L30 16 L34 12 L64 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 24" width="30" height="12">
+          <path d="M0 12 L10 12 L14 4 L20 20 L26 8 L30 16 L34 12 L64 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div>
         <h1>Mira Dataset Studio</h1>
         <p class="tagline">Build, generate and label offer &amp; want combinations for the matching model</p>
       </div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
+      <div class="tab-indicator" id="tab-indicator" aria-hidden="true"></div>
       <button class="tab-btn is-active" data-tab="create" role="tab" aria-selected="true">Create</button>
       <button class="tab-btn" data-tab="generate" role="tab" aria-selected="false">Generate</button>
       <button class="tab-btn" data-tab="label" role="tab" aria-selected="false">Label</button>

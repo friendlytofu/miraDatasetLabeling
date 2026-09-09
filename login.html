@@ -5,21 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sign in · Mira Dataset Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #14201D;
-    --ink-soft: #4B5750;
-    --muted: #7C8880;
+    --ink: #12181C;
+    --ink-soft: #4A555C;
+    --muted: #8A939A;
     --card: #FFFFFF;
-    --border: #CBD3CE;
-    --teal: #1E7A6E;
-    --teal-deep: #123F39;
-    --teal-tint: #E1EFEC;
-    --red: #A13D2B;
-    --red-tint: #F6E2DC;
-    --font-display: "Newsreader", Georgia, serif;
-    --font-body: "IBM Plex Sans", system-ui, sans-serif;
+    --line: #DEE3DF;
+    --teal: #0E8C79;
+    --teal-deep: #0B5C50;
+    --teal-tint: #E1F1EC;
+    --red: #D5492E;
+    --red-tint: #FBE6E0;
+    --font-ui: "Inter", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   body {
@@ -29,47 +28,48 @@
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
-    font-family: var(--font-body);
+    font-family: var(--font-ui);
     color: var(--ink);
     background:
-      radial-gradient(circle at 15% 10%, rgba(30,122,110,0.16), transparent 45%),
-      radial-gradient(circle at 85% 90%, rgba(201,122,43,0.14), transparent 45%),
-      linear-gradient(180deg, #0F1B18 0%, #14201D 100%);
+      radial-gradient(circle at 15% 10%, rgba(14,140,121,0.18), transparent 45%),
+      radial-gradient(circle at 85% 90%, rgba(221,138,46,0.14), transparent 45%),
+      linear-gradient(180deg, #0D1417 0%, #10171B 100%);
   }
   .panel {
     width: 100%;
     max-width: 380px;
     background: var(--card);
-    border-radius: 14px;
+    border-radius: 16px;
     padding: 2.25rem 2rem 2rem;
-    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06) inset;
-    animation: rise 0.45s cubic-bezier(.2,.9,.3,1) both;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55);
+    animation: rise 0.4s cubic-bezier(.2,.9,.3,1) both;
   }
   @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
 
   .mark {
-    width: 42px; height: 42px; border-radius: 10px;
-    background: linear-gradient(145deg, var(--teal), var(--teal-deep));
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(150deg, #17B39B, var(--teal-deep));
     display: flex; align-items: center; justify-content: center;
     margin-bottom: 1.1rem;
-    box-shadow: 0 6px 16px -6px rgba(30,122,110,0.6);
+    box-shadow: 0 6px 16px -6px rgba(14, 140, 121, 0.6);
   }
-  .mark svg { width: 22px; height: 22px; color: #EAF3F1; }
+  .mark svg { width: 20px; height: 8px; color: #ECFBF7; }
 
-  h1 { font-family: var(--font-display); font-weight: 600; font-size: 1.45rem; margin: 0 0 0.3rem; }
-  .sub { color: var(--muted); font-size: 0.88rem; margin: 0 0 1.6rem; line-height: 1.5; }
+  h1 { font-weight: 600; font-size: 1.3rem; margin: 0 0 0.3rem; letter-spacing: -0.015em; }
+  .sub { color: var(--muted); font-size: 0.87rem; margin: 0 0 1.6rem; line-height: 1.5; }
 
-  label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 0.4rem; }
+  label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 0.4rem; }
   .pw-row { position: relative; }
   input[type="password"], input[type="text"] {
     width: 100%;
-    font-family: var(--font-body);
-    font-size: 0.98rem;
-    padding: 0.7rem 2.6rem 0.7rem 0.85rem;
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
-    background: #FBFBFA;
+    font-family: var(--font-ui);
+    font-size: 0.96rem;
+    padding: 0.68rem 2.6rem 0.68rem 0.85rem;
+    border: 1.5px solid var(--line);
+    border-radius: 9px;
+    background: #FAFBFA;
+    color: var(--ink);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   input:focus {
@@ -80,36 +80,35 @@
   .toggle-pw {
     position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
     background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.35rem;
+    font-size: 0.74rem; font-weight: 600; padding: 0.2rem 0.35rem;
   }
   .toggle-pw:hover { color: var(--ink-soft); }
 
   button.submit {
     width: 100%;
     margin-top: 1.25rem;
-    font-family: var(--font-body);
+    font-family: var(--font-ui);
     font-weight: 600;
-    font-size: 0.95rem;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
+    font-size: 0.94rem;
+    padding: 0.72rem 1rem;
+    border-radius: 9px;
     border: none;
-    background: linear-gradient(145deg, var(--teal), var(--teal-deep));
-    color: #F3F5F2;
+    background: var(--teal-deep);
+    color: #F1FAF8;
     cursor: pointer;
-    box-shadow: 0 10px 22px -10px rgba(30,122,110,0.65);
-    transition: transform 0.1s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
   }
-  button.submit:hover { box-shadow: 0 14px 26px -10px rgba(30,122,110,0.75); }
+  button.submit:hover { background: #094A40; }
   button.submit:active { transform: translateY(1px) scale(0.99); }
   button.submit:disabled { opacity: 0.6; cursor: default; }
 
   .error {
     display: none;
     margin-top: 0.9rem;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     color: var(--red);
     background: var(--red-tint);
-    border: 1px solid rgba(161,61,43,0.25);
+    border: 1px solid rgba(213,73,46,0.2);
     border-radius: 8px;
     padding: 0.55rem 0.75rem;
   }
@@ -121,7 +120,7 @@
     40%, 60% { transform: translateX(4px); }
   }
 
-  .footnote { margin-top: 1.5rem; font-size: 0.75rem; color: var(--muted); text-align: center; }
+  .footnote { margin-top: 1.5rem; font-size: 0.74rem; color: var(--muted); text-align: center; }
 </style>
 </head>
 <body>
@@ -141,7 +140,7 @@
     </div>
 
     <button type="submit" class="submit" id="submit-btn">Continue</button>
-    <p class="error" id="error-msg">Incorrect password — please try again.</p>
+    <p class="error" id="error-msg"></p>
     <p class="footnote">Access is restricted to authorized labelers.</p>
   </form>
 
@@ -158,28 +157,49 @@
     toggleBtn.textContent = showing ? "Show" : "Hide";
   });
 
+  function showError(text) {
+    errorMsg.textContent = text;
+    errorMsg.classList.add("is-visible");
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     errorMsg.classList.remove("is-visible");
     submitBtn.disabled = true;
     submitBtn.textContent = "Checking…";
+
+    // Trim accidental whitespace from paste/autofill — the most common
+    // reason a correct-looking password gets rejected.
+    const password = pwInput.value.trim();
+
     try {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: pwInput.value }),
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ password }),
       });
+
       if (res.ok) {
         const params = new URLSearchParams(window.location.search);
         const next = params.get("next") || "/";
         window.location.href = next;
         return;
       }
-      throw new Error("bad password");
-    } catch {
-      errorMsg.classList.add("is-visible");
+
+      if (res.status === 401) {
+        showError("Incorrect password — please try again.");
+      } else {
+        // Something other than a bad password: a stale/misconfigured
+        // deployment, missing Function, etc. Surface the status so it's
+        // diagnosable instead of looking like a typo.
+        showError(`Sign-in failed (server responded ${res.status}). The deployment may need attention.`);
+      }
       pwInput.value = "";
       pwInput.focus();
+    } catch (err) {
+      showError("Couldn't reach the server. Check your connection and try again.");
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "Continue";

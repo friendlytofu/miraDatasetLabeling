@@ -9,6 +9,17 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 });
 
 // ---------- tab switching ----------
+const tabIndicator = document.getElementById("tab-indicator");
+
+function moveTabIndicator(btn) {
+  if (!tabIndicator || !btn) return;
+  const nav = btn.parentElement;
+  const navRect = nav.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+  tabIndicator.style.width = `${btnRect.width}px`;
+  tabIndicator.style.transform = `translateX(${btnRect.left - navRect.left}px)`;
+}
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => {
@@ -19,19 +30,32 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.add("is-active");
     btn.setAttribute("aria-selected", "true");
     document.getElementById(`panel-${btn.dataset.tab}`).classList.add("is-active");
+    moveTabIndicator(btn);
     if (btn.dataset.tab === "label") loadNextEntry();
     if (btn.dataset.tab === "export") loadExportStats();
     if (btn.dataset.tab === "create") loadItems();
   });
 });
 
+window.addEventListener("load", () => {
+  moveTabIndicator(document.querySelector(".tab-btn.is-active"));
+});
+window.addEventListener("resize", () => {
+  moveTabIndicator(document.querySelector(".tab-btn.is-active"));
+});
+
 // ---------- helpers ----------
 async function api(path, opts) {
   const res = await fetch(`/api${path}`, {
     headers: { "content-type": "application/json" },
+    credentials: "same-origin",
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    window.location.href = "/login.html";
+    throw new Error("Session expired — redirecting to sign in.");
+  }
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
