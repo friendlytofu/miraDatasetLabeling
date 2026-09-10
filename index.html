@@ -378,6 +378,10 @@
         <span>Labeler</span>
         <input id="labeler-name" type="text" placeholder="Your name" autocomplete="name" />
       </label>
+      <div class="label-task-controls">
+        <button id="reset-all-labels-btn" class="btn-text" type="button">Reset all labels</button>
+        <button id="delete-all-tasks-btn" class="btn-text danger-text" type="button">Delete all labeling tasks</button>
+      </div>
       <div class="progress-wrap">
         <div id="label-progress" class="progress-line">0 unlabeled · 0 total</div>
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
@@ -413,6 +417,14 @@
           <h3 class="chip chip-want">Wants</h3>
           <div id="entry-wants" class="entry-items"></div>
         </div>
+      </div>
+      <div class="entry-editor">
+        <div class="editor-heading"><div><span class="section-kicker">EDIT THIS TASK</span><h4>Fix the offer / want text before labeling</h4></div><span class="hint compact">Changes update this labeling task and its export snapshot.</span></div>
+        <div class="entry-edit-grid">
+          <label class="field"><span>Offers · one per line</span><textarea id="entry-offers-edit" rows="4" spellcheck="true"></textarea></label>
+          <label class="field"><span>Wants · one per line</span><textarea id="entry-wants-edit" rows="4" spellcheck="true"></textarea></label>
+        </div>
+        <div class="entry-editor-actions"><button id="save-entry-edit-btn" class="btn btn-secondary" type="button">Save task edits</button><span id="entry-edit-status" class="status-line" aria-live="polite"></span></div>
       </div>
       <div class="label-actions">
         <button id="label-back-btn" class="btn btn-secondary" type="button">← Back <span class="key-hint">←</span></button>
@@ -470,6 +482,12 @@
         </div>
         <p id="export-status" class="status-line" aria-live="polite"></p>
         <p class="hint compact export-link-note">Deleted or unlinked label activities are automatically excluded from this release.</p>
+        <div class="export-editor">
+          <div class="editor-heading"><div><span class="section-kicker">EXPORT EDITOR</span><h3>Edit the release clearly</h3><p class="hint compact">Load the current labeled JSONL, make corrections, validate it, then download your edited file. This does not change the database.</p></div></div>
+          <div class="export-editor-actions"><button id="load-export-editor-btn" class="btn btn-secondary" type="button">Load labeled export</button><label class="file-btn btn btn-secondary">Open JSONL file<input id="export-file-input" type="file" accept=".jsonl,.json,.txt,application/json,application/jsonl,text/plain" hidden></label><button id="validate-export-btn" class="btn btn-secondary" type="button">Validate</button><button id="download-edited-export-btn" class="btn btn-primary" type="button">Download edited JSONL</button></div>
+          <textarea id="export-editor" class="export-editor-textarea" spellcheck="false" placeholder='One JSON object per line, e.g. {"id":0,"offers":["…"],"wants":["…"],"human_label":"yes","labeler":"…","labeled_blind":true,"labeled_at":"…"}'></textarea>
+          <div id="export-editor-status" class="status-line" aria-live="polite">No export loaded.</div>
+        </div>
       </div>
       <div class="card preview-card">
         <div class="card-topline"><span class="step-number">06</span><span>Format preview</span></div>

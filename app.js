@@ -768,6 +768,12 @@ async function loadNextEntry() {
 }
 
 async function renderEntry(entry) {
+  const offersEdit = document.getElementById("entry-offers-edit");
+  const wantsEdit = document.getElementById("entry-wants-edit");
+  if (offersEdit) offersEdit.value = (entry.offers || []).join("\n");
+  if (wantsEdit) wantsEdit.value = (entry.wants || []).join("\n");
+  const editStatus = document.getElementById("entry-edit-status");
+  if (editStatus) editStatus.textContent = "";
   const sharedTokens = crossCategorySharedTokens(entry);
   const offerHtml = highlightCrossCategory(entry.offers, sharedTokens);
   const wantHtml = highlightCrossCategory(entry.wants, sharedTokens);
@@ -777,6 +783,53 @@ async function renderEntry(entry) {
 function escapeHtml(text) { return String(text).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 document.getElementById("label-back-btn").addEventListener("click", async () => { if (labelIndex > 0) await showLabelEntry(labelEntries[labelIndex - 1], labelIndex - 1); });
 document.getElementById("label-forward-btn").addEventListener("click", async () => { if (labelIndex < labelEntries.length - 1) await showLabelEntry(labelEntries[labelIndex + 1], labelIndex + 1); });
+
+
+document.getElementById("save-entry-edit-btn")?.addEventListener("click", async (event) => {
+  if (!currentEntry) return;
+  const offers = document.getElementById("entry-offers-edit").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const wants = document.getElementById("entry-wants-edit").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const status = document.getElementById("entry-edit-status");
+  if (!offers.length || !wants.length) { setStatus(status, "Keep at least one offer and one want.", "error"); return; }
+  setBusy(event.currentTarget, true, "Saving…");
+  setStatus(status, "Saving task edits…");
+  try {
+    const updated = await api("/entries", { method:"PUT", body:JSON.stringify({ id:currentEntry.id, offers, wants }) });
+    currentEntry = { ...currentEntry, ...updated };
+    const at = labelEntries.findIndex(e => e.id === currentEntry.id);
+    if (at >= 0) labelEntries[at] = { ...labelEntries[at], ...updated };
+    await renderEntry(currentEntry);
+    setStatus(status, "Saved. The edited text will be used by the next labeled export.", "success");
+    await loadExportStats();
+    showToast(`Entry #${currentEntry.id} updated.`, "success");
+  } catch (error) { setStatus(status, error.message, "error"); showToast(error.message, "error"); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+document.getElementById("reset-all-labels-btn")?.addEventListener("click", async (event) => {
+  if (!confirm("Reset ALL labels? All labeling decisions and label history will be cleared, but the current labeling tasks and their offer/want text will remain.")) return;
+  setBusy(event.currentTarget, true, "Resetting…");
+  try {
+    await api("/entries?action=reset_labels", { method:"DELETE" });
+    selectedHistoryIds.clear();
+    await loadNextEntry(); await loadLabelHistory(); await loadExportStats();
+    showToast("All labels reset. Tasks remain ready for a fresh review.", "success");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+document.getElementById("delete-all-tasks-btn")?.addEventListener("click", async (event) => {
+  if (!confirm("DELETE ALL CURRENT LABELING TASKS? This removes every generated labeling task and its label history. Your source items, users, and creation-pair data are preserved. This cannot be undone.")) return;
+  if (!confirm("Final check: permanently clear the entire labeling queue?")) return;
+  setBusy(event.currentTarget, true, "Clearing…");
+  try {
+    const result = await api("/entries?action=clear", { method:"DELETE" });
+    selectedHistoryIds.clear(); currentEntry = null; labelEntries = []; labelIndex = -1;
+    await loadNextEntry(); await loadLabelHistory(); await loadExportStats();
+    showToast(`Cleared ${Number(result.deleted_entries || 0)} labeling tasks.`, "success");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(event.currentTarget, false); }
+});
 
 document.getElementById("label-reset-btn").addEventListener("click", async () => {
   if (!currentEntry || !confirm(`Reset Entry #${currentEntry.id} and return it to the unlabeled queue?`)) return;
@@ -973,6 +1026,59 @@ document.getElementById("export-history-btn")?.addEventListener("click", () => {
   const tab = document.querySelector('.tab-btn[data-tab="label"]');
   if (tab) tab.click();
   setTimeout(() => document.getElementById("label-history-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+});
+
+
+// ---------- EXPORT EDITOR ----------
+const exportEditor = document.getElementById("export-editor");
+const exportEditorStatus = document.getElementById("export-editor-status");
+
+function parseExportText(text) {
+  const lines = String(text || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!lines.length) throw new Error("The export is empty.");
+  const rows = lines.map((line, i) => {
+    let row;
+    try { row = JSON.parse(line); } catch { throw new Error(`Line ${i + 1} is not valid JSON.`); }
+    if (!Array.isArray(row.offers) || !row.offers.length) throw new Error(`Line ${i + 1}: offers must be a non-empty array.`);
+    if (!Array.isArray(row.wants) || !row.wants.length) throw new Error(`Line ${i + 1}: wants must be a non-empty array.`);
+    if (row.human_label !== "yes" && row.human_label !== "no") throw new Error(`Line ${i + 1}: human_label must be yes or no.`);
+    if (row.labeler != null && typeof row.labeler !== "string") throw new Error(`Line ${i + 1}: labeler must be text.`);
+    return row;
+  });
+  return rows;
+}
+function setExportEditorStatus(text, kind="") { if (exportEditorStatus) setStatus(exportEditorStatus, text, kind); }
+async function loadExportEditor() {
+  const button = document.getElementById("load-export-editor-btn");
+  setBusy(button, true, "Loading…"); setExportEditorStatus("Loading current labeled export…");
+  try {
+    const res = await fetch("/api/export", { credentials:"same-origin", cache:"no-store" });
+    if (!res.ok) { const data = await res.json().catch(()=>({})); throw new Error(data.error || "No labeled export is available yet."); }
+    exportEditor.value = await res.text();
+    setExportEditorStatus("Loaded. You can edit the JSONL below, then validate it.", "success");
+  } catch (error) { setExportEditorStatus(error.message, "error"); }
+  finally { setBusy(button, false); }
+}
+document.getElementById("load-export-editor-btn")?.addEventListener("click", loadExportEditor);
+document.getElementById("export-file-input")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0]; if (!file) return;
+  try { exportEditor.value = await file.text(); setExportEditorStatus(`Loaded ${file.name}. Validate before downloading.`, "success"); }
+  catch (error) { setExportEditorStatus(error.message, "error"); }
+  event.target.value = "";
+});
+document.getElementById("validate-export-btn")?.addEventListener("click", () => {
+  try { const rows = parseExportText(exportEditor.value); setExportEditorStatus(`Valid JSONL · ${rows.length} records ready to download.`, "success"); }
+  catch (error) { setExportEditorStatus(error.message, "error"); }
+});
+document.getElementById("download-edited-export-btn")?.addEventListener("click", (event) => {
+  try {
+    const rows = parseExportText(exportEditor.value).map((row, i) => ({ ...row, id:i }));
+    const content = rows.map(row => JSON.stringify(row)).join("\\n") + "\\n";
+    const blob = new Blob([content], { type:"application/jsonl;charset=utf-8" });
+    const url = URL.createObjectURL(blob); const link = document.createElement("a");
+    link.href=url; link.download=`mira_edited_dataset_${new Date().toISOString().slice(0,10)}.jsonl`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    setExportEditorStatus(`Downloaded edited JSONL · ${rows.length} records.`, "success"); showToast("Edited export downloaded.", "success");
+  } catch (error) { setExportEditorStatus(error.message, "error"); }
 });
 
 // ---------- gentle interactivity ----------

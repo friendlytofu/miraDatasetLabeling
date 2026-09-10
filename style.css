@@ -615,3 +615,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .history-row-check{margin:0}
 @media (max-width:820px){.history-check-all{width:100%;margin-right:0}.history-toolbar .history-filter{flex:1;min-width:130px}.history-toolbar .btn{flex:1}}
 @media (max-width:560px){.history-row{grid-template-columns:18px 30px 1fr}.history-meta{grid-column:3;text-align:left}.history-toolbar .history-filter,.history-toolbar .btn{width:100%;flex:auto}}
+
+/* Label task controls + editors */
+.label-toolbar { align-items: end; }
+.label-task-controls { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-left:auto; }
+.entry-editor { margin-top:22px; padding:18px; border:1px solid var(--line, rgba(255,255,255,.1)); border-radius:18px; background:rgba(255,255,255,.025); }
+.editor-heading { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:14px; }
+.editor-heading h3,.editor-heading h4 { margin:4px 0 0; }
+.entry-edit-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.entry-edit-grid textarea,.export-editor-textarea { width:100%; min-height:105px; resize:vertical; border:1px solid var(--line, rgba(255,255,255,.12)); border-radius:12px; background:rgba(0,0,0,.16); color:inherit; padding:12px 14px; font:inherit; line-height:1.5; box-sizing:border-box; }
+.entry-editor-actions,.export-editor-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
+.export-editor { margin-top:22px; padding-top:22px; border-top:1px solid var(--line, rgba(255,255,255,.1)); }
+.export-editor-textarea { min-height:300px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+.file-btn { cursor:pointer; display:inline-flex; align-items:center; }
+@media (max-width: 760px) { .entry-edit-grid { grid-template-columns:1fr; } .label-task-controls { margin-left:0; } .editor-heading { flex-direction:column; } }
