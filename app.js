@@ -539,7 +539,7 @@ function renderQualityTrend(quality){
   const pairs=Number(q.current_pairs ?? q.unique_pairs ?? 0);
   const duplicates=Number(q.duplicates||0);
   const avg=Number(q.average_pair_words||0);
-  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${duplicates.toLocaleString()}</strong><span>repeated pairs in the current bank</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Re-examined ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. This assessment reads only the current pair bank; label history, save attempts, and old snapshots are excluded.</div>`;
+  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${duplicates.toLocaleString()}</strong><span>repeated / near-duplicate pairs</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Re-examined ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. This assessment uses only distinct current offer + want pairs, collapsing exact repeats and tiny copy-edit variants. Label history, save attempts, and old snapshots are excluded.</div>`;
 }
 
 function clearQualityAssessment(){
@@ -567,7 +567,7 @@ async function refreshQualityDashboard(){
     const q=data.quality||{};
     document.getElementById("global-quality-pairs").textContent=Number(q.current_pairs ?? q.unique_pairs ?? 0).toLocaleString();
     document.getElementById("global-quality-duplicate").textContent=`${Number(q.duplicate_rate||0)}%`;
-    document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} repeated current pair${Number(q.duplicates||0)===1?'':'s'}`;
+    document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} repeated or near-duplicate record${Number(q.duplicates||0)===1?'':'s'} in current bank`;
     document.getElementById("global-quality-length").textContent=`${Number(q.average_pair_words||0)} words`;
     document.getElementById("quality-chart-caption").textContent=scope==='all'?'current bank':`${activeUser?.name||'active user'} current bank`;
     renderQualityTrend(q); renderGlobalThemes("global-offer-themes",q.offer_themes); renderGlobalThemes("global-want-themes",q.want_themes);

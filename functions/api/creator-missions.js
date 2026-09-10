@@ -50,6 +50,44 @@ async function ensureTables(env) {
 function ownerOf(value) { return String(value || "default").trim().slice(0, 120) || "default"; }
 function normalize(value) { return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase(); }
 function pairKey(offer, want) { return `${normalize(offer)}\u001f${normalize(want)}`; }
+
+// Quality assessment treats tiny copy-edit variants of the same current pair as
+// one pair (for example, a one-word typo such as "up to" vs "up for"). This is
+// deliberately conservative and is used only for the current quality readout;
+// historical events and authored text are never modified.
+function qualityText(value) {
+  return String(value || "").toLocaleLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function editSimilarity(a, b) {
+  const left = qualityText(a), right = qualityText(b);
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const short = left.length <= right.length ? left : right;
+  const long = left.length <= right.length ? right : left;
+  if (long.length - short.length > Math.max(24, Math.ceil(long.length * 0.02))) return 0;
+  let prev = Array.from({length: short.length + 1}, (_, i) => i);
+  for (let j = 1; j <= long.length; j++) {
+    const cur = [j];
+    for (let i = 1; i <= short.length; i++) {
+      cur[i] = Math.min(
+        cur[i - 1] + 1,
+        prev[i] + 1,
+        prev[i - 1] + (short[i - 1] === long[j - 1] ? 0 : 1)
+      );
+    }
+    prev = cur;
+  }
+  return 1 - prev[short.length] / long.length;
+}
+function qualityPairDuplicate(a, b) {
+  if (a.pair_key === b.pair_key) return true;
+  return editSimilarity(a.offer_text, b.offer_text) >= 0.985 &&
+    editSimilarity(a.want_text, b.want_text) >= 0.985;
+}
 async function pairCount(env, owner) {
   const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM creator_pairs WHERE owner=?").bind(owner).first();
   return Number(row?.total || 0);
@@ -159,35 +197,41 @@ async function qualityStats(env, owner = null) {
     `SELECT id, owner, pair_key, offer_text, want_text, created_at FROM creator_pairs${where} ORDER BY id ASC`
   ).bind(...bind).all()).results || [];
 
-  const normalizedKeys = new Set();
+  // Collapse exact and tiny copy-edit variants before calculating ANY current-bank
+  // metric. creator_pairs historically allowed the same pair under different owners,
+  // and old authored rows can also differ only by a small typo.
+  const currentPairs = [];
+  for (const pair of pairRows) {
+    if (currentPairs.some(existing => qualityPairDuplicate(existing, pair))) continue;
+    currentPairs.push(pair);
+  }
+
   const offerThemes = {}; const wantThemes = {};
   let totalWords = 0;
-  for (const pair of pairRows) {
-    const key = String(pair.pair_key || pairKey(pair.offer_text, pair.want_text));
-    normalizedKeys.add(key);
+  for (const pair of currentPairs) {
     totalWords += `${pair.offer_text || ''} ${pair.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length;
     const ot = themeOf(pair.offer_text); const wt = themeOf(pair.want_text);
     offerThemes[ot] = (offerThemes[ot] || 0) + 1;
     wantThemes[wt] = (wantThemes[wt] || 0) + 1;
   }
 
-  // A duplicate here means the SAME normalized offer + want pair currently exists
-  // more than once in the current bank (for example, under different owners).
-  // Historical save attempts are intentionally excluded.
-  const duplicateCount = Math.max(0, pairRows.length - normalizedKeys.size);
-  const duplicateRate = pairRows.length ? Math.round(duplicateCount / pairRows.length * 1000) / 10 : 0;
+  // Diagnostic only: rows that are duplicates of another CURRENT pair.
+  // This is not history and does not include creator_pair_events or snapshots.
+  const duplicateCount = Math.max(0, pairRows.length - currentPairs.length);
+  const duplicateRate = currentPairs.length ? Math.round(duplicateCount / currentPairs.length * 1000) / 10 : 0;
   const top = (obj) => Object.entries(obj)
     .sort((a,b)=>b[1]-a[1])
     .slice(0,8)
-    .map(([theme,count])=>({theme,count,share:pairRows.length ? Math.round(count/pairRows.length*1000)/10 : 0}));
+    .map(([theme,count])=>({theme,count,share:currentPairs.length ? Math.round(count/currentPairs.length*1000)/10 : 0}));
 
   return {
-    unique_pairs: pairRows.length,
-    current_pairs: pairRows.length,
-    attempts: pairRows.length,
+    unique_pairs: currentPairs.length,
+    current_pairs: currentPairs.length,
+    stored_pair_rows: pairRows.length,
+    attempts: currentPairs.length,
     duplicates: duplicateCount,
     duplicate_rate: duplicateRate,
-    average_pair_words: pairRows.length ? Math.round(totalWords/pairRows.length*10)/10 : 0,
+    average_pair_words: currentPairs.length ? Math.round(totalWords/currentPairs.length*10)/10 : 0,
     offer_themes: top(offerThemes),
     want_themes: top(wantThemes),
     assessed_at: new Date().toISOString()

@@ -138,3 +138,9 @@ Fixed a post-save HTTP 500 in `functions/api/items.js`. The owner quality snapsh
 ### Upload retry protection
 
 Create/draft saves use an idempotency key. If a request succeeds in D1 but the browser loses the response, pressing Save again reuses the same key and the API returns the existing upload rather than inserting duplicate items or creator-pair events. Migration `0011_idempotent_uploads.sql` adds the supporting indexes; the API also self-heals older D1 databases by adding the columns when possible.
+## Current pair quality cleanup
+
+Migration `0012_dedupe_current_pairs.sql` removes duplicate rows from the current `creator_pairs` bank, keeping the earliest row for each normalized offer + want pair, then adds a global unique index on `pair_key`. This is separate from historical `creator_pair_events`; those audit records are preserved and are not used by Pair Quality.
+
+After deploying this build, apply migration 0012 to the production D1 database. Do not manually edit the quality numbers in the Cloudflare dashboard; the displayed count is computed from D1.
+
