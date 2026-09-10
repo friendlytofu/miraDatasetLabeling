@@ -177,26 +177,76 @@
     </div>
   </section>
 
-  <!-- USER + TEAM BOARD -->
+  <!-- TEAM IDENTITY + BULLETIN BOARD -->
   <section class="team-console" aria-label="Users and progress board">
     <div class="user-console-card">
-      <div class="team-console-head"><div><span class="section-kicker">TEAM IDENTITY</span><h2>Choose who is working.</h2><p>Each user gets a private mission trail, saved presets, and a place on the progress board.</p></div><span id="user-verified-pill" class="user-verified-pill">No user verified</span></div>
-      <div class="user-controls">
-        <label class="user-field"><span>User</span><select id="user-select" aria-label="Select user"><option value="">Select a user</option></select></label>
-        <label class="user-field"><span>User code</span><input id="user-code" type="password" placeholder="Enter code to verify" autocomplete="off" /></label>
-        <button id="user-verify-btn" class="btn btn-primary user-action-btn" type="button">Verify</button>
-        <button id="user-add-btn" class="btn btn-secondary user-action-btn" type="button">Add user</button>
-        <button id="user-rename-btn" class="btn btn-secondary user-action-btn" type="button" disabled>Rename</button>
-        <button id="user-code-btn" class="btn btn-secondary user-action-btn" type="button" disabled>Set code</button>
+      <div class="team-console-head">
+        <div>
+          <span class="section-kicker">TEAM IDENTITY</span>
+          <h2>Choose who is working.</h2>
+          <p>Pick your name, enter your private code, and Mira will keep your contributions and mission progress attached to you.</p>
+        </div>
+        <span id="user-verified-pill" class="user-verified-pill">No user signed in</span>
       </div>
+
+      <div class="user-directory-head">
+        <div>
+          <span class="user-directory-label">TEAM MEMBERS</span>
+          <strong id="user-directory-count">0 users</strong>
+        </div>
+        <button id="user-add-btn" class="btn btn-secondary" type="button">+ Add new user</button>
+      </div>
+
+      <div id="user-directory" class="user-directory" aria-label="Team members">
+        <div class="user-directory-empty">No users yet. Add the first team member to get started.</div>
+      </div>
+
+      <div id="user-signin-panel" class="user-signin-panel" hidden>
+        <div class="user-signin-copy">
+          <span>Signing in as</span>
+          <strong id="selected-user-name">—</strong>
+        </div>
+        <div class="user-code-entry">
+          <label class="user-field">
+            <span>User code</span>
+            <div class="password-field">
+              <input id="user-code" type="password" placeholder="Enter your code" autocomplete="off" inputmode="text" />
+              <button id="user-code-toggle" class="password-toggle" type="button" aria-label="Show user code">Show</button>
+            </div>
+          </label>
+          <button id="user-verify-btn" class="btn btn-primary user-action-btn" type="button">Sign in</button>
+        </div>
+      </div>
+
+      <div id="user-management" class="user-management" hidden>
+        <span class="user-management-label">SIGNED-IN ACCOUNT</span>
+        <div class="user-management-actions">
+          <button id="user-rename-btn" class="btn btn-secondary user-action-btn" type="button">Rename</button>
+          <button id="user-code-btn" class="btn btn-secondary user-action-btn" type="button">Change code</button>
+          <button id="user-switch-btn" class="btn-text" type="button">Switch user</button>
+        </div>
+      </div>
+
+      <div id="user-add-panel" class="user-add-panel" hidden>
+        <div class="user-add-head"><div><span>NEW TEAM MEMBER</span><strong>Create a simple account</strong></div><button id="user-add-cancel" class="btn-text" type="button">cancel</button></div>
+        <div class="user-add-grid">
+          <label class="user-field"><span>Name</span><input id="new-user-name" type="text" maxlength="80" placeholder="e.g. Alex" autocomplete="off" /></label>
+          <label class="user-field"><span>Private code</span><div class="password-field"><input id="new-user-code" type="password" maxlength="120" placeholder="At least 4 characters" autocomplete="new-password" /><button id="new-user-code-toggle" class="password-toggle" type="button" aria-label="Show new user code">Show</button></div></label>
+          <button id="user-create-btn" class="btn btn-primary user-action-btn" type="button">Create user</button>
+        </div>
+      </div>
+
       <p id="user-status-line" class="status-line" aria-live="polite"></p>
     </div>
+
     <div class="bulletin-card">
-      <div class="team-console-head bulletin-head"><div><span class="section-kicker">BULLETIN BOARD</span><h2>Who's moving the dataset?</h2></div><button id="users-refresh-btn" class="btn-text" type="button">refresh</button></div>
+      <div class="team-console-head bulletin-head">
+        <div><span class="section-kicker">BULLETIN BOARD</span><h2>Who's moving the dataset?</h2></div>
+        <button id="users-refresh-btn" class="btn-text" type="button">refresh</button>
+      </div>
       <div id="bulletin-list" class="bulletin-list"><div class="bulletin-empty">Add users to start the board.</div></div>
     </div>
   </section>
-
 
   <section class="mission-card create-mission-card" id="create-mission-card" aria-label="Offer and want creation mission">
     <div class="mission-main">

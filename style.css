@@ -574,3 +574,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .team-console,.quality-dashboard-grid { gap:14px; }
   .user-controls { grid-template-columns:1fr; }
 }
+
+/* ---------- rebuilt team identity ---------- */
+.user-directory-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:15px;padding-bottom:9px;border-bottom:1px solid rgba(30,57,51,.08)}
+.user-directory-head>div{display:flex;align-items:baseline;gap:8px}
+.user-directory-label,.user-management-label{font:700 .52rem var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.user-directory-head strong{font-size:.66rem;color:var(--ink)}
+.user-directory{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px;max-height:190px;overflow:auto;padding-right:2px}
+.user-person{appearance:none;width:100%;display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:8px;text-align:left;padding:9px;border:1px solid rgba(30,57,51,.08);border-radius:12px;background:rgba(255,255,255,.72);color:var(--ink);cursor:pointer;transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.user-person:hover{transform:translateY(-1px);border-color:rgba(48,139,116,.24);box-shadow:0 8px 18px rgba(20,52,46,.06)}
+.user-person.is-selected{border-color:rgba(48,139,116,.38);background:#f1f8f5}
+.user-person.is-verified{box-shadow:inset 3px 0 0 #2f8b76}
+.user-person-avatar{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#dfeee9;color:#337769;font:700 .72rem var(--font-ui)}
+.user-person-main{min-width:0;display:grid;gap:2px}
+.user-person-main strong{font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-person-main small{font-size:.52rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-person-action{font:700 .52rem var(--font-mono);color:#337769;white-space:nowrap}
+.user-directory-empty{grid-column:1/-1;padding:15px;border:1px dashed rgba(30,57,51,.13);border-radius:12px;text-align:center;color:var(--muted);font-size:.58rem}
+.user-signin-panel{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:end;gap:16px;margin-top:10px;padding:11px;border-radius:13px;background:#f7faf8;border:1px solid rgba(48,139,116,.12)}
+.user-signin-copy{display:grid;gap:3px;min-width:130px}.user-signin-copy span{font:600 .51rem var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.user-signin-copy strong{font-size:.78rem}
+.user-code-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.password-field{position:relative;display:flex}.password-field input{padding-right:52px!important}.password-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#337769;font:700 .52rem var(--font-mono);cursor:pointer;padding:5px}
+.user-management{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:9px 11px;border-radius:12px;background:#eef7f3;border:1px solid rgba(48,139,116,.12)}
+.user-management-actions{display:flex;align-items:center;gap:7px}.user-management-actions .user-action-btn{min-height:32px}.user-management-actions .btn-text{padding:6px}
+.user-add-panel{margin-top:10px;padding:12px;border-radius:13px;background:#fffaf0;border:1px solid rgba(193,127,44,.16)}
+.user-add-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.user-add-head div{display:grid;gap:2px}.user-add-head span{font:700 .5rem var(--font-mono);letter-spacing:.1em;color:#9a6a2d}.user-add-head strong{font-size:.72rem}
+.user-add-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}.user-add-grid .user-action-btn{min-height:38px}
+@media(max-width:980px){.user-directory{grid-template-columns:1fr}.user-signin-panel{grid-template-columns:1fr}.user-add-grid{grid-template-columns:1fr 1fr}.user-add-grid .user-action-btn{grid-column:1/-1}}
+@media(max-width:720px){.user-directory{max-height:none}.user-person{grid-template-columns:30px minmax(0,1fr)}.user-person-action{display:none}.user-management{align-items:flex-start;flex-direction:column}.user-management-actions{width:100%;flex-wrap:wrap}.user-add-grid{grid-template-columns:1fr}.user-add-grid .user-action-btn{grid-column:auto}.user-code-entry{grid-template-columns:1fr}.user-signin-panel{gap:9px}}

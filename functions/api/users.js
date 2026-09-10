@@ -13,6 +13,16 @@ async function ensureTables(env) {
     active INTEGER NOT NULL DEFAULT 1
   )`).run();
   await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name_ci ON users(lower(name))").run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS label_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER,
+    action TEXT NOT NULL,
+    old_label TEXT,
+    new_label TEXT,
+    labeler TEXT,
+    details TEXT,
+    acted_at TEXT NOT NULL
+  )`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_pairs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL DEFAULT 'default',
     pair_key TEXT NOT NULL, offer_text TEXT NOT NULL, want_text TEXT NOT NULL,

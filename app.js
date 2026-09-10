@@ -364,34 +364,70 @@ function renderBucketGrid(counts = {}) {
 renderBucketGrid();
 
 // ---------- USERS + BULLETIN BOARD ----------
-const USER_KEY = "mira_active_user_v1";
-const storedUser = JSON.parse(localStorage.getItem(USER_KEY) || "null");
+const USER_KEY = "mira_active_user_v2";
+const storedUser = JSON.parse(localStorage.getItem(USER_KEY) || localStorage.getItem("mira_active_user_v1") || "null");
 let activeUser = storedUser ? {...storedUser, verified:false} : null;
 let selectedUserId = activeUser?.id ? Number(activeUser.id) : null;
 let usersCache = [];
+
 function saveActiveUser() { localStorage.setItem(USER_KEY, JSON.stringify(activeUser || null)); }
 function isVerifiedUser() { return !!(activeUser?.id && activeUser?.owner && activeUser?.verified === true); }
 function getActiveUserOwner() { return isVerifiedUser() ? activeUser.owner : "default"; }
 function getActiveUserName() { return isVerifiedUser() ? activeUser.name : "default"; }
 function setUserStatus(message, kind = "") { const el=document.getElementById("user-status-line"); if (!el) return; el.textContent=message || ""; el.className=`status-line ${kind ? `is-${kind}` : ""}`; }
+
+function setPasswordVisibility(inputId, buttonId) {
+  const input=document.getElementById(inputId), button=document.getElementById(buttonId);
+  if(!input || !button) return;
+  button.addEventListener("click",()=>{
+    const visible=input.type === "text";
+    input.type=visible ? "password" : "text";
+    button.textContent=visible ? "Show" : "Hide";
+    button.setAttribute("aria-label", visible ? "Show user code" : "Hide user code");
+  });
+}
+setPasswordVisibility("user-code","user-code-toggle");
+setPasswordVisibility("new-user-code","new-user-code-toggle");
+
 function renderUsers(users) {
   usersCache = users || [];
-  const select = document.getElementById("user-select");
-  if (!select) return;
-  select.innerHTML = `<option value="">Select a user</option>` + usersCache.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
-  const preferredId = selectedUserId || activeUser?.id;
-  if (preferredId && usersCache.some(u => Number(u.id) === Number(preferredId))) select.value = String(preferredId);
-  const verified = isVerifiedUser();
-  document.getElementById("user-verified-pill").textContent = verified ? `✓ ${activeUser.name}` : "No user verified";
-  document.getElementById("user-verified-pill").classList.toggle("is-verified", verified);
-  document.getElementById("user-rename-btn").disabled = !verified;
-  document.getElementById("user-code-btn").disabled = !verified;
-  const labeler = document.getElementById("labeler-name");
-  if (labeler) { labeler.value = verified ? activeUser.name : ""; labeler.readOnly = verified; labeler.placeholder = verified ? "Verified user" : "Verify a user above"; }
+  const directory=document.getElementById("user-directory");
+  const count=document.getElementById("user-directory-count");
+  if(count) count.textContent=`${usersCache.length} user${usersCache.length===1?'':'s'}`;
+  if(!directory) return;
+  if(!usersCache.length){
+    directory.innerHTML='<div class="user-directory-empty">No users yet. Add the first team member to get started.</div>';
+  } else {
+    directory.innerHTML=usersCache.map(u=>{
+      const selected=Number(selectedUserId)===Number(u.id);
+      const verified=isVerifiedUser() && Number(activeUser.id)===Number(u.id);
+      const initial=escapeHtml((u.name||"?").slice(0,1).toUpperCase());
+      return `<button type="button" class="user-person ${selected?'is-selected':''} ${verified?'is-verified':''}" data-user-id="${Number(u.id)}" aria-pressed="${selected?'true':'false'}">
+        <span class="user-person-avatar">${initial}</span>
+        <span class="user-person-main"><strong>${escapeHtml(u.name)}</strong><small>${Number(u.pairs||0).toLocaleString()} pairs · ${Number(u.labels||0).toLocaleString()} labels</small></span>
+        <span class="user-person-action">${verified?'✓ Signed in':selected?'Enter code →':'Sign in →'}</span>
+      </button>`;
+    }).join('');
+  }
+  directory.querySelectorAll("[data-user-id]").forEach(btn=>btn.addEventListener("click",()=>selectUser(Number(btn.dataset.userId))));
+
+  const pill=document.getElementById("user-verified-pill");
+  if(pill){ pill.textContent=isVerifiedUser()?`✓ ${activeUser.name}`:"No user signed in"; pill.classList.toggle("is-verified",isVerifiedUser()); }
+  const signin=document.getElementById("user-signin-panel");
+  const management=document.getElementById("user-management");
+  if(signin) signin.hidden=isVerifiedUser() || !selectedUserId;
+  if(management) management.hidden=!isVerifiedUser();
+  if(selectedUserId){
+    const selected=usersCache.find(u=>Number(u.id)===Number(selectedUserId));
+    const name=document.getElementById("selected-user-name");
+    if(name) name.textContent=selected?.name || activeUser?.name || "—";
+  }
 }
+
 function renderBulletin(users) {
   const el=document.getElementById("bulletin-list");
-  if (!users?.length) { el.innerHTML='<div class="bulletin-empty">No users yet — add the first contributor.</div>'; return; }
+  if(!el) return;
+  if(!users?.length){ el.innerHTML='<div class="bulletin-empty">No users yet — add the first contributor.</div>'; return; }
   el.innerHTML=users.map(u=>{
     const selected=Number(activeUser?.id)===Number(u.id);
     const points=Number(u.labels||0)+Number(u.pairs||0);
@@ -400,50 +436,83 @@ function renderBulletin(users) {
     return `<div class="bulletin-row ${selected?'is-current':''}"><div class="bulletin-rank">${u.rank}</div><div class="bulletin-avatar">${escapeHtml((u.name||"?").slice(0,1).toUpperCase())}</div><div class="bulletin-copy"><strong>${escapeHtml(u.name)}</strong><span>${Number(u.labels||0).toLocaleString()} labels · ${Number(u.pairs||0).toLocaleString()} pairs · ${Number(u.creation_missions||0)} creation missions</span>${missionBits.length?`<em>${missionBits.join(' · ')}</em>`:''}</div><div class="bulletin-score"><strong>${points.toLocaleString()}</strong><small>points</small></div></div>`;
   }).join('');
 }
+
 async function loadUsers() {
-  try { const data=await api("/users"); renderUsers(data.users||[]); renderBulletin(data.users||[]); } catch(error) { showToast(error.message,"error"); }
+  try { const data=await api("/users"); renderUsers(data.users||[]); renderBulletin(data.users||[]); } catch(error) { showToast(error.message,"error"); setUserStatus("Could not load team members. Try refresh.","error"); }
 }
+
+function selectUser(id) {
+  const user=usersCache.find(u=>Number(u.id)===Number(id));
+  if(!user) return;
+  selectedUserId=Number(user.id);
+  activeUser={id:user.id,name:user.name,owner:`user:${user.id}`,verified:false};
+  saveActiveUser();
+  switchMissionOwner(activeUser.owner);
+  const code=document.getElementById("user-code"); if(code){code.value=""; code.focus();}
+  setUserStatus(`Enter ${user.name}'s private code to sign in.`);
+  renderUsers(usersCache);
+}
+
 async function verifySelectedUser() {
-  const id=Number(selectedUserId || document.getElementById("user-select").value); const code=document.getElementById("user-code").value.trim();
-  if (!id) { setUserStatus("Select a user first.","error"); return; }
-  if (!code) { setUserStatus("Enter the user code to verify.","error"); return; }
+  const id=Number(selectedUserId); const code=document.getElementById("user-code")?.value.trim();
+  if(!id){setUserStatus("Choose a team member first.","error");return;}
+  if(!code){setUserStatus("Enter the private code to sign in.","error");document.getElementById("user-code")?.focus();return;}
+  const button=document.getElementById("user-verify-btn"); setBusy(button,true,"Signing in…");
   try {
     const data=await api("/users",{method:"POST",body:JSON.stringify({action:"validate",id,code})});
-    selectedUserId = Number(data.user.id);
-    activeUser={...data.user,verified:true}; saveActiveUser(); switchMissionOwner(activeUser.owner); document.getElementById("user-code").value="";
-    setUserStatus(`Verified as ${activeUser.name}. Your missions and progress now follow this account.`,"success");
+    selectedUserId=Number(data.user.id); activeUser={...data.user,verified:true}; saveActiveUser(); switchMissionOwner(activeUser.owner);
+    document.getElementById("user-code").value="";
+    setUserStatus(`Signed in as ${activeUser.name}. Your work now follows this account.` ,"success");
     renderUsers(usersCache); await Promise.all([refreshCreateMission(),refreshQualityDashboard(),loadItems()]);
   } catch(error) {
-    // Keep the selected user in place so a mistyped code never makes the dropdown appear broken.
-    setUserStatus(error.message,"error");
-    renderUsers(usersCache);
-  }
+    setUserStatus(error.message || "That code is not valid.","error");
+    document.getElementById("user-code")?.focus();
+  } finally { setBusy(button,false); }
 }
-document.getElementById("user-select").addEventListener("change", () => {
-  const id=Number(document.getElementById("user-select").value); selectedUserId = id || null;
-  const user=usersCache.find(u=>Number(u.id)===id);
-  if (!user) { activeUser=null; saveActiveUser(); switchMissionOwner("default"); renderUsers(usersCache); setUserStatus(""); return; }
-  // Selection and verification are separate: selecting a name must not destroy the selection if the code is wrong.
-  activeUser={id:user.id,name:user.name,owner:`user:${user.id}`,verified:false}; saveActiveUser(); switchMissionOwner(activeUser.owner); renderUsers(usersCache); setUserStatus(`Enter ${user.name}'s code to continue.`);
+
+document.getElementById("user-verify-btn")?.addEventListener("click", verifySelectedUser);
+document.getElementById("user-code")?.addEventListener("keydown", e=>{if(e.key==='Enter'){e.preventDefault();verifySelectedUser();}});
+document.getElementById("user-switch-btn")?.addEventListener("click",()=>{
+  activeUser=null; selectedUserId=null; saveActiveUser(); switchMissionOwner("default"); renderUsers(usersCache); setUserStatus("Choose another team member to sign in.");
 });
-document.getElementById("user-verify-btn").addEventListener("click", verifySelectedUser);
-document.getElementById("user-code").addEventListener("keydown", e=>{ if(e.key==='Enter'){e.preventDefault();verifySelectedUser();} });
-document.getElementById("user-add-btn").addEventListener("click", async () => {
-  const name=prompt("New user name:"); if(!name?.trim()) return; const code=prompt("Set a user code (at least 4 characters):"); if(!code?.trim()) return;
-  try { const data=await api("/users",{method:"POST",body:JSON.stringify({action:"add",name:name.trim(),code:code.trim()})}); activeUser={...data.user,verified:true}; saveActiveUser(); switchMissionOwner(activeUser.owner); await loadUsers(); setUserStatus(`${activeUser.name} added and verified.` ,"success"); await Promise.all([refreshCreateMission(),refreshQualityDashboard()]); }
+
+document.getElementById("user-add-btn")?.addEventListener("click",()=>{
+  const panel=document.getElementById("user-add-panel");
+  if(panel) panel.hidden=false;
+  document.getElementById("new-user-name")?.focus();
+});
+document.getElementById("user-add-cancel")?.addEventListener("click",()=>{
+  const panel=document.getElementById("user-add-panel"); if(panel) panel.hidden=true;
+  document.getElementById("new-user-name").value=""; document.getElementById("new-user-code").value="";
+});
+
+document.getElementById("user-create-btn")?.addEventListener("click",async()=>{
+  const name=document.getElementById("new-user-name")?.value.trim(); const code=document.getElementById("new-user-code")?.value.trim();
+  if(!name){setUserStatus("Enter a name for the new user.","error");document.getElementById("new-user-name")?.focus();return;}
+  if(code.length<4){setUserStatus("Use a private code with at least 4 characters.","error");document.getElementById("new-user-code")?.focus();return;}
+  const button=document.getElementById("user-create-btn"); setBusy(button,true,"Creating…");
+  try {
+    const data=await api("/users",{method:"POST",body:JSON.stringify({action:"add",name,code})});
+    activeUser={...data.user,verified:true}; selectedUserId=Number(data.user.id); saveActiveUser(); switchMissionOwner(activeUser.owner);
+    document.getElementById("new-user-name").value=""; document.getElementById("new-user-code").value=""; document.getElementById("user-add-panel").hidden=true;
+    await loadUsers(); setUserStatus(`${activeUser.name} created and signed in.` ,"success"); await Promise.all([refreshCreateMission(),refreshQualityDashboard(),loadItems()]);
+  } catch(error){setUserStatus(error.message,"error");} finally {setBusy(button,false);}
+});
+
+async function renameActiveUser() {
+  if(!isVerifiedUser()) return;
+  const name=prompt("Rename this user:",activeUser.name);
+  if(!name?.trim()||name.trim()===activeUser.name) return;
+  try { const data=await api("/users",{method:"POST",body:JSON.stringify({action:"rename",id:activeUser.id,name:name.trim()})}); activeUser.name=data.user.name; saveActiveUser(); await loadUsers(); setUserStatus(`User renamed to ${activeUser.name}. Existing work stays attached to this account.` ,"success"); await Promise.all([refreshCreateMission(),refreshQualityDashboard()]); }
   catch(error){setUserStatus(error.message,"error");}
-});
-document.getElementById("user-rename-btn").addEventListener("click", async () => {
-  if(!isVerifiedUser()) return; const name=prompt("Rename this user:",activeUser.name); if(!name?.trim()||name.trim()===activeUser.name) return;
-  try { const data=await api("/users",{method:"POST",body:JSON.stringify({action:"rename",id:activeUser.id,name:name.trim()})}); activeUser.name=data.user.name; saveActiveUser(); await loadUsers(); setUserStatus(`User renamed to ${activeUser.name}. Existing labels stay attached to this user.`,"success"); await Promise.all([refreshCreateMission(),refreshQualityDashboard()]); }
-  catch(error){setUserStatus(error.message,"error");}
-});
-document.getElementById("user-code-btn").addEventListener("click", async () => {
+}
+document.getElementById("user-rename-btn")?.addEventListener("click",renameActiveUser);
+document.getElementById("user-code-btn")?.addEventListener("click",async()=>{
   if(!isVerifiedUser()) return; const code=prompt("Set a new user code (at least 4 characters):"); if(!code?.trim()) return;
   try { await api("/users",{method:"POST",body:JSON.stringify({action:"set_code",id:activeUser.id,code:code.trim()})}); setUserStatus("User code updated. Keep it private.","success"); }
   catch(error){setUserStatus(error.message,"error");}
 });
-document.getElementById("users-refresh-btn").addEventListener("click", loadUsers);
+document.getElementById("users-refresh-btn")?.addEventListener("click", loadUsers);
 
 // Pair quality is a dataset-wide dashboard; it can optionally be narrowed to the verified user.
 function renderQualityTrend(trend) {
@@ -823,5 +892,6 @@ const rippleStyle = document.createElement("style"); rippleStyle.textContent = "
 (async function bootstrap() {
   moveTabIndicator(document.querySelector(".tab-btn.is-active"));
   await loadItems();
+  await loadUsers();
   await loadNextEntry();
 })();
