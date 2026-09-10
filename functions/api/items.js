@@ -125,8 +125,9 @@ export async function onRequestPost({ request, env }) {
     }
   }
 
+  let batchResults = null;
   try {
-    await env.DB.batch(statements);
+    batchResults = await env.DB.batch(statements);
   } catch (writeError) {
     // A concurrent retry can race the unique idempotency index. If that happened,
     // return the already-created upload instead of surfacing a misleading 500.
@@ -140,22 +141,30 @@ export async function onRequestPost({ request, env }) {
     return errorJson("Could not save the upload. No duplicate items were created.", 500);
   }
 
-  const created = (await env.DB.prepare(
-    uploadKey
-      ? "SELECT id, text, type, source_phrase, created_at FROM items WHERE upload_key=? ORDER BY upload_index ASC, id ASC"
-      : `SELECT id, text, type, source_phrase, created_at FROM items WHERE id IN (${validated.map(() => "?").join(",")}) ORDER BY id ASC`
-  ).bind(...(uploadKey ? [uploadKey] : [])).all()).results || [];
-
-  if (!uploadKey) {
-    // The non-idempotent branch needs the IDs from the batch results.
-    // Re-query by the most recent IDs using the batch metadata is less portable than
-    // retaining the inserted rows, so construct them from the known order below.
-    const lastIds = statements.slice(0, validated.length);
-    // D1 batch results expose meta.last_row_id; use those to return exact IDs.
-    const results = await env.DB.prepare(
-      `SELECT id, text, type, source_phrase, created_at FROM items WHERE id > (SELECT COALESCE(MAX(id),0) - ? FROM items) ORDER BY id DESC LIMIT ?`
-    ).bind(validated.length, validated.length).all();
-    created.splice(0, created.length, ...((results.results || []).reverse()));
+  let created = [];
+  if (uploadKey) {
+    created = (await env.DB.prepare(
+      "SELECT id, text, type, source_phrase, created_at FROM items WHERE upload_key=? ORDER BY upload_index ASC, id ASC"
+    ).bind(uploadKey).all()).results || [];
+  } else {
+    // D1 batch results preserve statement order and expose last_row_id for INSERTs.
+    // Use those exact IDs instead of guessing from the most recent rows, which can
+    // return another concurrent upload's items.
+    const ids = (batchResults || []).slice(0, validated.length)
+      .map(result => Number(result?.meta?.last_row_id || 0))
+      .filter(id => id > 0);
+    if (ids.length === validated.length) {
+      const rows = (await env.DB.prepare(
+        `SELECT id, text, type, source_phrase, created_at FROM items WHERE id IN (${ids.map(() => "?").join(",")})`
+      ).bind(...ids).all()).results || [];
+      const byId = new Map(rows.map(row => [Number(row.id), row]));
+      created = ids.map(id => byId.get(id)).filter(Boolean);
+    } else {
+      // Defensive fallback for runtimes that omit last_row_id. This branch is only
+      // for legacy non-idempotent callers; never use a broad "latest N" query when
+      // an exact ID list is available.
+      created = [];
+    }
   }
 
   let creatorPairResult = null;

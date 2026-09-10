@@ -44,7 +44,7 @@ export async function onRequestGet({ request, env }) {
     }
 
     if (!parsed.length) {
-      if (qualityCheck) return Response.json({ checked: true, total: 0, repeated_relationships: [], repeat_tasks: 0, clean_total: 0, removed_if_cleaned: 0, excluded_tasks: [], excluded_tasks_total: 0, max_pair_uses });
+      if (qualityCheck) return Response.json({ checked: true, total: 0, repeated_relationships: [], repeat_tasks: 0, clean_total: 0, removed_if_cleaned: 0, excluded_tasks: [], excluded_tasks_total: 0, maxPairUses });
       return errorJson("No labeled entries match the selected export.", 404);
     }
 
