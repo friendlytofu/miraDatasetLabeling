@@ -184,6 +184,7 @@ document.getElementById("save-draft-btn").addEventListener("click", async (event
   if (document.getElementById("offer-include").checked) items.push({ text: document.getElementById("offer-text").value.trim(), type: "offer", source_phrase: phrase });
   if (document.getElementById("want-include").checked) items.push({ text: document.getElementById("want-text").value.trim(), type: "want", source_phrase: phrase });
   if (!items.length || items.some((item) => !item.text)) { setStatus(document.getElementById("create-status"), "Select at least one non-empty item.", "error"); return; }
+  if (items.length === 2 && !isVerifiedUser()) { setStatus(document.getElementById("create-status"), "Verify a user above before saving a new pair so it is credited correctly.", "error"); return; }
   setBusy(button, true, "Saving…");
   try {
     const pair = items.length === 2 && items.some((item) => item.type === "offer") && items.some((item) => item.type === "want")
@@ -195,6 +196,7 @@ document.getElementById("save-draft-btn").addEventListener("click", async (event
     phraseInput.value = ""; draftArea.hidden = true;
     await loadItems();
     await refreshCreateMission();
+    await refreshQualityDashboard();
   } catch (error) {
     setStatus(document.getElementById("create-status"), `Error: ${error.message}`, "error");
     showToast(error.message, "error");
@@ -338,7 +340,7 @@ document.getElementById("generate-btn").addEventListener("click", async (event) 
     renderBucketGrid(res.bucketCounts);
     document.getElementById("metric-unlabeled").textContent = "…";
     showToast(`${res.generated} combinations added.`, "success");
-    await refreshMission();
+    
   } catch (error) {
     setStatus(statusEl, `Error: ${error.message}`, "error"); showToast(error.message, "error");
   } finally { setBusy(button, false); }
@@ -361,15 +363,118 @@ function renderBucketGrid(counts = {}) {
 }
 renderBucketGrid();
 
+// ---------- USERS + BULLETIN BOARD ----------
+const USER_KEY = "mira_active_user_v1";
+const storedUser = JSON.parse(localStorage.getItem(USER_KEY) || "null");
+let activeUser = storedUser ? {...storedUser, verified:false} : null;
+let usersCache = [];
+function saveActiveUser() { localStorage.setItem(USER_KEY, JSON.stringify(activeUser || null)); }
+function isVerifiedUser() { return !!(activeUser?.id && activeUser?.owner && activeUser?.verified === true); }
+function getActiveUserOwner() { return isVerifiedUser() ? activeUser.owner : "default"; }
+function getActiveUserName() { return isVerifiedUser() ? activeUser.name : "default"; }
+function setUserStatus(message, kind = "") { const el=document.getElementById("user-status-line"); if (!el) return; el.textContent=message || ""; el.className=`status-line ${kind ? `is-${kind}` : ""}`; }
+function renderUsers(users) {
+  usersCache = users || [];
+  const select = document.getElementById("user-select");
+  if (!select) return;
+  select.innerHTML = `<option value="">Select a user</option>` + usersCache.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
+  if (activeUser?.id && usersCache.some(u => Number(u.id) === Number(activeUser.id))) select.value = String(activeUser.id);
+  const verified = isVerifiedUser();
+  document.getElementById("user-verified-pill").textContent = verified ? `✓ ${activeUser.name}` : "No user verified";
+  document.getElementById("user-verified-pill").classList.toggle("is-verified", verified);
+  document.getElementById("user-rename-btn").disabled = !verified;
+  document.getElementById("user-code-btn").disabled = !verified;
+  const labeler = document.getElementById("labeler-name");
+  if (labeler) { labeler.value = verified ? activeUser.name : ""; labeler.readOnly = verified; labeler.placeholder = verified ? "Verified user" : "Verify a user above"; }
+}
+function renderBulletin(users) {
+  const el=document.getElementById("bulletin-list");
+  if (!users?.length) { el.innerHTML='<div class="bulletin-empty">No users yet — add the first contributor.</div>'; return; }
+  el.innerHTML=users.map(u=>{
+    const selected=Number(activeUser?.id)===Number(u.id);
+    const points=Number(u.labels||0)+Number(u.pairs||0);
+    const cm=u.active_creation_mission;
+    const missionBits=cm?[`Create ${Math.min(cm.progress,cm.goal)}/${cm.goal}`]:[];
+    return `<div class="bulletin-row ${selected?'is-current':''}"><div class="bulletin-rank">${u.rank}</div><div class="bulletin-avatar">${escapeHtml((u.name||"?").slice(0,1).toUpperCase())}</div><div class="bulletin-copy"><strong>${escapeHtml(u.name)}</strong><span>${Number(u.labels||0).toLocaleString()} labels · ${Number(u.pairs||0).toLocaleString()} pairs · ${Number(u.creation_missions||0)} creation missions</span>${missionBits.length?`<em>${missionBits.join(' · ')}</em>`:''}</div><div class="bulletin-score"><strong>${points.toLocaleString()}</strong><small>points</small></div></div>`;
+  }).join('');
+}
+async function loadUsers() {
+  try { const data=await api("/users"); renderUsers(data.users||[]); renderBulletin(data.users||[]); } catch(error) { showToast(error.message,"error"); }
+}
+async function verifySelectedUser() {
+  const id=Number(document.getElementById("user-select").value); const code=document.getElementById("user-code").value.trim();
+  if (!id) { setUserStatus("Select a user first.","error"); return; }
+  if (!code) { setUserStatus("Enter the user code to verify.","error"); return; }
+  try {
+    const data=await api("/users",{method:"POST",body:JSON.stringify({action:"validate",id,code})});
+    activeUser={...data.user,verified:true}; saveActiveUser(); switchMissionOwner(activeUser.owner); document.getElementById("user-code").value="";
+    setUserStatus(`Verified as ${activeUser.name}. Your missions and progress now follow this account.`,"success");
+    renderUsers(usersCache); await Promise.all([refreshCreateMission(),refreshQualityDashboard(),loadItems()]);
+  } catch(error) { activeUser=null; saveActiveUser(); renderUsers(usersCache); setUserStatus(error.message,"error"); }
+}
+document.getElementById("user-select").addEventListener("change", () => {
+  const id=Number(document.getElementById("user-select").value); const user=usersCache.find(u=>Number(u.id)===id);
+  if (!user) { activeUser=null; saveActiveUser(); switchMissionOwner("default"); renderUsers(usersCache); return; }
+  activeUser={id:user.id,name:user.name,owner:`user:${user.id}`,verified:false}; saveActiveUser(); switchMissionOwner(activeUser.owner); renderUsers(usersCache); setUserStatus(`Enter ${user.name}'s code to continue.`);
+});
+document.getElementById("user-verify-btn").addEventListener("click", verifySelectedUser);
+document.getElementById("user-code").addEventListener("keydown", e=>{ if(e.key==='Enter'){e.preventDefault();verifySelectedUser();} });
+document.getElementById("user-add-btn").addEventListener("click", async () => {
+  const name=prompt("New user name:"); if(!name?.trim()) return; const code=prompt("Set a user code (at least 4 characters):"); if(!code?.trim()) return;
+  try { const data=await api("/users",{method:"POST",body:JSON.stringify({action:"add",name:name.trim(),code:code.trim()})}); activeUser={...data.user,verified:true}; saveActiveUser(); switchMissionOwner(activeUser.owner); await loadUsers(); setUserStatus(`${activeUser.name} added and verified.` ,"success"); await Promise.all([refreshCreateMission(),refreshQualityDashboard()]); }
+  catch(error){setUserStatus(error.message,"error");}
+});
+document.getElementById("user-rename-btn").addEventListener("click", async () => {
+  if(!isVerifiedUser()) return; const name=prompt("Rename this user:",activeUser.name); if(!name?.trim()||name.trim()===activeUser.name) return;
+  try { const data=await api("/users",{method:"POST",body:JSON.stringify({action:"rename",id:activeUser.id,name:name.trim()})}); activeUser.name=data.user.name; saveActiveUser(); await loadUsers(); setUserStatus(`User renamed to ${activeUser.name}. Existing labels stay attached to this user.`,"success"); await Promise.all([refreshCreateMission(),refreshQualityDashboard()]); }
+  catch(error){setUserStatus(error.message,"error");}
+});
+document.getElementById("user-code-btn").addEventListener("click", async () => {
+  if(!isVerifiedUser()) return; const code=prompt("Set a new user code (at least 4 characters):"); if(!code?.trim()) return;
+  try { await api("/users",{method:"POST",body:JSON.stringify({action:"set_code",id:activeUser.id,code:code.trim()})}); setUserStatus("User code updated. Keep it private.","success"); }
+  catch(error){setUserStatus(error.message,"error");}
+});
+document.getElementById("users-refresh-btn").addEventListener("click", loadUsers);
+
+// Pair quality is a dataset-wide dashboard; it can optionally be narrowed to the verified user.
+function renderQualityTrend(trend) {
+  const el=document.getElementById("quality-trend-chart");
+  if(!trend?.length){el.innerHTML='<div class="theme-empty">No quality snapshots yet.</div>';return;}
+  const rows=trend.slice(-30), max=Math.max(1,...rows.map(r=>Number(r.duplicate_rate||0))), width=680,height=190,pad=28;
+  const pts=rows.map((r,i)=>{const x=pad+(rows.length===1?(width-pad*2)/2:(i/(rows.length-1))*(width-pad*2));const y=height-pad-(Number(r.duplicate_rate||0)/max)*(height-pad*2);return [x,y];});
+  const poly=pts.map(p=>p.join(',')).join(' ');
+  const circles=pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.2"><title>${escapeHtml(new Date(rows[i].captured_at).toLocaleString())}: ${Number(rows[i].duplicate_rate||0)}% duplicate rate · ${Number(rows[i].total_pairs||0)} pairs · ${Number(rows[i].average_pair_words||0)} avg words</title></circle>`).join('');
+  const labels=rows.length>1?[rows[0],rows[rows.length-1]].map((r,i)=>`<text x="${i?width-pad:pad}" y="${height-6}" text-anchor="${i?'end':'start'}">${escapeHtml(new Date(r.captured_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}))}</text>`).join(''):'';
+  el.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Duplicate rate quality trend"><line x1="${pad}" y1="${height-pad}" x2="${width-pad}" y2="${height-pad}" class="chart-axis"/><polyline points="${poly}" class="quality-line"/>${circles}${labels}</svg><div class="quality-chart-legend"><span><i></i>Duplicate rate</span><span>Latest: <strong>${Number(rows.at(-1).duplicate_rate||0)}%</strong></span></div>`;
+}
+function renderGlobalThemes(id,themes){renderPairThemeList(id,themes);}
+async function refreshQualityDashboard(){
+  try {
+    const scope=document.getElementById("quality-scope-select")?.value||"all";
+    const owner=scope==='active' && isVerifiedUser() ? `?owner=${encodeURIComponent(activeUser.owner)}` : '';
+    const data=await api(`/creator-missions${owner}`); const q=data.quality||{};
+    document.getElementById("global-quality-pairs").textContent=Number(q.unique_pairs||0).toLocaleString();
+    document.getElementById("global-quality-duplicate").textContent=`${Number(q.duplicate_rate||0)}%`;
+    document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} duplicate attempts · ${Number(q.attempts||0).toLocaleString()} attempts`;
+    document.getElementById("global-quality-length").textContent=`${Number(q.average_pair_words||0)} words`;
+    document.getElementById("quality-chart-caption").textContent=scope==='all'?'all saved snapshots':`${activeUser?.name||'active user'} snapshots`;
+    renderQualityTrend(data.trend||[]); renderGlobalThemes("global-offer-themes",q.offer_themes); renderGlobalThemes("global-want-themes",q.want_themes);
+  } catch(error){showToast(error.message,"error");}
+}
+document.getElementById("quality-scope-select").addEventListener("change",refreshQualityDashboard);
+document.getElementById("quality-refresh-btn").addEventListener("click",refreshQualityDashboard);
+
 // ---------- CREATION MISSION ----------
 const CREATE_MISSION_KEY = "mira_creation_mission_v1";
-let createMission = JSON.parse(localStorage.getItem(CREATE_MISSION_KEY) || "null") || {
-  goal: 25, flag: "✦", active: false, started_at: null, starting_pairs: 0, owner: "default"
-};
+function missionStorageKey(base, owner) { return `${base}::${owner || "default"}`; }
+function defaultCreateMission() { return { goal:25, flag:"✦", active:false, started_at:null, starting_pairs:0, owner:"default" }; }
+let createMission = JSON.parse(localStorage.getItem(missionStorageKey(CREATE_MISSION_KEY, getCreateMissionOwner())) || "null") || defaultCreateMission();
 let createMissionPresets = [];
 
-function saveCreateMissionLocal() { localStorage.setItem(CREATE_MISSION_KEY, JSON.stringify(createMission)); }
-function getCreateMissionOwner() { return document.getElementById("labeler-name")?.value.trim() || "default"; }
+function saveCreateMissionLocal() { createMission.owner = getCreateMissionOwner(); localStorage.setItem(missionStorageKey(CREATE_MISSION_KEY, createMission.owner), JSON.stringify(createMission)); }
+function loadCreateMissionForOwner(owner) { createMission = JSON.parse(localStorage.getItem(missionStorageKey(CREATE_MISSION_KEY, owner)) || "null") || {...defaultCreateMission(), owner}; }
+
+function getCreateMissionOwner() { return getActiveUserOwner(); }
 function createMissionPercent(pairs) { return Math.min(100, Math.max(0, (pairs / Math.max(1, createMission.goal)) * 100)); }
 function setCreateMissionFlag(flag) {
   createMission.flag = flag || "✦";
@@ -439,8 +544,13 @@ async function refreshCreateMission() {
     const data = await api(`/creator-missions?owner=${encodeURIComponent(owner)}`);
     createMissionPresets = data.presets || [];
     renderCreateMissionPresets();
-    renderPairQuality(data.quality);
     const total = Number(data.pairTotal || 0);
+    if (data.active) {
+      createMission.active = true; createMission.owner = owner; createMission.goal = Number(data.active.goal || createMission.goal || 25); createMission.flag = data.active.flag || createMission.flag; createMission.started_at = data.active.started_at; createMission.starting_pairs = Number(data.active.starting_pairs || 0); saveCreateMissionLocal();
+      setCreateMissionFlag(createMission.flag);
+    } else if (createMission.active && createMission.owner === owner) {
+      createMission.active = false; createMission.started_at = null; createMission.starting_pairs = total; saveCreateMissionLocal();
+    }
     if (createMission.owner !== owner) {
       createMission.active = false; createMission.started_at = null; createMission.starting_pairs = total; createMission.owner = owner; saveCreateMissionLocal();
     }
@@ -465,6 +575,7 @@ document.getElementById("create-mission-run-btn").addEventListener("click", asyn
   const owner = getCreateMissionOwner();
   const goal = Math.max(1, Math.min(10000, Number(document.getElementById("create-mission-goal").value) || 25));
   createMission.goal = goal;
+  if (!isVerifiedUser()) { showToast("Verify a user before running an individual mission.","error"); return; }
   setBusy(button, true, "Launching…");
   try {
     const data = await api(`/creator-missions?owner=${encodeURIComponent(owner)}`);
@@ -496,139 +607,17 @@ document.getElementById("create-mission-preset-list").addEventListener("click", 
 document.getElementById("create-mission-refresh-history-btn").addEventListener("click", refreshCreateMission);
 refreshCreateMission();
 
-// ---------- LABELING MISSION ----------
-const MISSION_KEY = "mira_labeling_mission_v2";
-let mission = JSON.parse(localStorage.getItem(MISSION_KEY) || "null") || {
-  goal: 100, flag: "⚑", active: false, started_at: null, starting_labeled: 0, generated_total: 0
-};
-let missionPresets = [];
-
-function saveMissionLocal() { localStorage.setItem(MISSION_KEY, JSON.stringify(mission)); }
-function missionPercent(labeled) { return Math.min(100, Math.max(0, (labeled / Math.max(1, mission.goal)) * 100)); }
-function setMissionFlag(flag) {
-  mission.flag = flag || "⚑";
-  saveMissionLocal();
-  document.getElementById("mission-flag-cloth").textContent = mission.flag;
-  document.querySelectorAll(".mission-flag-choice").forEach((b) => b.classList.toggle("is-active", b.dataset.flag === mission.flag));
+// ---------- MISSION OWNER ----------
+function switchMissionOwner(owner) {
+  loadCreateMissionForOwner(owner || "default");
 }
-function renderMissionPresets() {
-  const el = document.getElementById("mission-preset-list");
-  if (!missionPresets.length) { el.innerHTML = `<span class="mission-empty-inline">No presets yet — save a goal you like.</span>`; return; }
-  el.innerHTML = missionPresets.map((p) => `<div class="mission-preset"><button class="mission-preset-load" type="button" data-preset-id="${p.id}">${escapeHtml(p.flag)} ${escapeHtml(p.name)} · ${p.goal}</button><button class="mission-preset-delete" type="button" aria-label="Delete ${escapeHtml(p.name)}" data-delete-preset-id="${p.id}">×</button></div>`).join("");
-}
-function renderMissionHistory(history) {
-  const el = document.getElementById("mission-history-list");
-  if (!history?.length) { el.innerHTML = `<div class="mission-history-empty">No completed missions yet.</div>`; return; }
-  el.innerHTML = history.slice(0, 20).map((h) => {
-    const date = new Date(h.completed_at).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" });
-    const time = new Date(h.completed_at).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
-    return `<div class="mission-history-item"><span class="mission-history-flag">${escapeHtml(h.flag || "⚑")}</span><div class="mission-history-copy"><strong>${Number(h.labeled_total || h.goal)} labeled · goal ${Number(h.goal)}</strong><span>${date} · ${time}</span></div><span class="mission-history-total">${Number(h.generated_total || 0)} generated</span></div>`;
-  }).join("");
-}
-function updateMission(labeledTotal, history = null) {
-  const goal = Math.max(1, Number(mission.goal) || 100);
-  const labeled = mission.active ? Math.max(0, Number(labeledTotal) - Number(mission.starting_labeled || 0)) : 0;
-  const shown = Math.min(goal, labeled);
-  const pct = missionPercent(shown);
-  document.getElementById("mission-goal").value = goal;
-  document.getElementById("mission-title").textContent = mission.active ? `Label ${goal} activities.` : `Label ${goal} activities.`;
-  document.getElementById("mission-progress-text").textContent = `${shown} / ${goal} labeled`;
-  document.getElementById("mission-remaining-text").textContent = `${Math.max(0, goal - shown)} to go`;
-  document.getElementById("mission-progress-fill").style.width = `${pct}%`;
-  document.getElementById("mission-node-create").classList.toggle("is-done", mission.active && shown > 0);
-  document.getElementById("mission-node-create").classList.toggle("is-active", !mission.active);
-  document.getElementById("mission-node-label").classList.toggle("is-active", mission.active && shown < goal);
-  document.getElementById("mission-node-label").classList.toggle("is-done", mission.active && shown >= goal);
-  document.getElementById("mission-node-goal").classList.toggle("is-active", shown >= goal);
-  document.getElementById("mission-node-goal").classList.toggle("is-done", shown >= goal);
-  const lines = document.querySelectorAll(".mission-flow-line i");
-  if (lines[0]) lines[0].style.width = `${mission.active ? Math.min(100, pct) : 0}%`;
-  if (lines[1]) lines[1].style.width = `${shown >= goal ? 100 : 0}%`;
-  const status = document.getElementById("mission-status");
-  status.textContent = shown >= goal ? "Complete" : mission.active ? "In progress" : "Ready";
-  status.classList.toggle("is-complete", shown >= goal);
-  if (history) renderMissionHistory(history);
-}
-function getMissionOwner() { return document.getElementById("labeler-name")?.value.trim() || "default"; }
-
-async function refreshMission() {
-  try {
-    const [entryData, missionData] = await Promise.all([api("/entries?status=all&limit=1"), api(`/missions?owner=${encodeURIComponent(getMissionOwner())}`)]);
-    missionPresets = missionData.presets || [];
-    renderMissionPresets();
-    const total = Number(entryData.counts?.yes || 0) + Number(entryData.counts?.no || 0);
-    if (mission.active && total - Number(mission.starting_labeled || 0) >= Number(mission.goal || 100)) {
-      const result = await api("/missions", { method:"POST", body:JSON.stringify({ action:"complete", owner:getMissionOwner(), goal:mission.goal, flag:mission.flag, started_at:mission.started_at, starting_labeled:mission.starting_labeled, generated_total:mission.generated_total }) });
-      mission.active = false; mission.started_at = null; mission.starting_labeled = 0; mission.generated_total = 0; saveMissionLocal();
-      showToast(`Mission complete — ${result.labeled_total} labels logged.`, "success");
-      const refreshed = await api(`/missions?owner=${encodeURIComponent(getMissionOwner())}`);
-      renderMissionHistory(refreshed.history || []);
-    }
-    updateMission(total);
-  } catch (error) { showToast(error.message, "error"); }
-}
-
-document.getElementById("mission-goal").addEventListener("change", () => {
-  const value = Math.max(1, Math.min(10000, Number(document.getElementById("mission-goal").value) || 100));
-  mission.goal = value; saveMissionLocal(); refreshMission();
-});
-document.querySelectorAll(".mission-flag-choice").forEach((button) => button.addEventListener("click", () => setMissionFlag(button.dataset.flag)));
-document.getElementById("mission-run-btn").addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  const goal = Math.max(1, Math.min(10000, Number(document.getElementById("mission-goal").value) || 100));
-  mission.goal = goal;
-  setBusy(button, true, "Launching…");
-  try {
-    const data = await api("/entries?status=all&limit=1");
-    const labeledTotal = Number(data.counts?.yes || 0) + Number(data.counts?.no || 0);
-    if (!mission.active) {
-      const started = await api("/missions", { method:"POST", body:JSON.stringify({ action:"start", owner:getMissionOwner(), goal, flag:mission.flag }) });
-      mission.active = true; mission.started_at = started.mission.started_at; mission.starting_labeled = Number(started.mission.starting_labeled || labeledTotal); mission.generated_total = 0; saveMissionLocal();
-    }
-    const already = Math.max(0, labeledTotal - Number(mission.starting_labeled || labeledTotal));
-    const { counts } = await api("/entries?status=unlabeled&limit=1");
-    const queued = Number(counts?.unlabeled || 0);
-    const needed = Math.max(0, goal - already - queued);
-    if (needed > 0) {
-      let remaining = needed;
-      let generated = 0;
-      while (remaining > 0) {
-        const batch = Math.min(1000, remaining);
-        const result = await api("/generate", { method:"POST", body:JSON.stringify({ count:batch }) });
-        generated += Number(result.generated || 0);
-        remaining -= Number(result.generated || 0);
-        if (!result.generated || result.exhausted) break;
-      }
-      mission.generated_total += generated; saveMissionLocal();
-      showToast(`Mission loaded ${generated} fresh activities.`, generated ? "success" : "error");
-    } else showToast("Your mission queue is ready — keep labeling!", "success");
-    await refreshMission();
-    await activateTab("label");
-  } catch (error) { showToast(error.message, "error"); }
-  finally { setBusy(button, false); }
-});
-document.getElementById("mission-save-preset-btn").addEventListener("click", async () => {
-  const goal = Math.max(1, Math.min(10000, Number(document.getElementById("mission-goal").value) || 100));
-  const defaultName = `Mission · ${goal}`;
-  const name = prompt("Name this mission preset:", defaultName);
-  if (!name?.trim()) return;
-  try { await api("/missions", { method:"POST", body:JSON.stringify({ action:"preset", owner:getMissionOwner(), name:name.trim(), goal, flag:mission.flag }) }); await refreshMission(); showToast("Mission preset saved.", "success"); }
-  catch (error) { showToast(error.message, "error"); }
-});
-document.getElementById("mission-preset-list").addEventListener("click", async (event) => {
-  const load = event.target.closest("[data-preset-id]");
-  const del = event.target.closest("[data-delete-preset-id]");
-  if (load) { const preset = missionPresets.find((p) => String(p.id) === load.dataset.presetId); if (preset) { mission.goal = Number(preset.goal); setMissionFlag(preset.flag); saveMissionLocal(); document.getElementById("mission-goal").value = mission.goal; refreshMission(); showToast(`${preset.name} loaded.`); } }
-  if (del) { if (!confirm("Delete this mission preset?")) return; try { await api("/missions", { method:"POST", body:JSON.stringify({ action:"delete_preset", owner:getMissionOwner(), id:Number(del.dataset.deletePresetId) }) }); await refreshMission(); } catch(error) { showToast(error.message,"error"); } }
-});
-document.getElementById("mission-refresh-history-btn").addEventListener("click", refreshMission);
-refreshMission();
 
 // ---------- LABEL ----------
 const HIGHLIGHT_COLORS = ["#fde68a", "#bfdbfe", "#fbcfe8", "#bbf7d0", "#ddd6fe", "#fed7aa"];
 const labelerInput = document.getElementById("labeler-name");
-labelerInput.value = localStorage.getItem("mira_labeler_name") || "";
-labelerInput.addEventListener("input", () => { localStorage.setItem("mira_labeler_name", labelerInput.value); refreshMission(); refreshCreateMission(); });
+labelerInput.value = isVerifiedUser() ? activeUser.name : "";
+labelerInput.readOnly = isVerifiedUser();
+labelerInput.addEventListener("input", () => { if (!isVerifiedUser()) { localStorage.setItem("mira_labeler_name", labelerInput.value); refreshCreateMission(); } });
 let currentEntry = null;
 let labelEntries = [];
 let labelIndex = -1;
@@ -717,7 +706,7 @@ document.getElementById("label-reset-btn").addEventListener("click", async () =>
   try {
     await api("/label", { method: "PUT", body: JSON.stringify({ id: currentEntry.id, labeler, acted_at: formatLocalISO(new Date()) }) });
     showToast(`Entry #${currentEntry.id} reset.`, "success");
-    await loadNextEntry(); await loadLabelHistory(); await refreshMission();
+    await loadNextEntry(); await loadLabelHistory(); 
   } catch (error) { showToast(error.message, "error"); }
 });
 
@@ -728,7 +717,7 @@ document.getElementById("label-delete-btn").addEventListener("click", async () =
   try {
     await api(`/label?id=${encodeURIComponent(currentEntry.id)}&labeler=${encodeURIComponent(labeler)}`, { method: "DELETE" });
     showToast(`Entry #${currentEntry.id} deleted.`, "success");
-    await loadNextEntry(); await loadLabelHistory(); await refreshMission();
+    await loadNextEntry(); await loadLabelHistory(); 
   } catch (error) { showToast(error.message, "error"); }
 });
 
@@ -743,7 +732,7 @@ async function labelCurrent(humanLabel) {
     await api("/label", { method: "POST", body: JSON.stringify({ id: currentEntry.id, human_label: humanLabel, labeler, labeled_at: formatLocalISO(new Date()) }) });
     await new Promise((resolve) => setTimeout(resolve, 150)); feedback.classList.remove("is-active");
     showToast(currentEntry.status === "labeled" ? `Entry #${currentEntry.id} updated.` : `Entry #${currentEntry.id} labeled.`, "success");
-    await loadNextEntry(); await loadLabelHistory(); await refreshMission();
+    await loadNextEntry(); await loadLabelHistory(); 
   } catch (error) { feedback.classList.remove("is-active"); showToast(error.message, "error"); }
   finally { labelingBusy = false; }
 }
@@ -797,355 +786,6 @@ document.getElementById("export-btn").addEventListener("click", async (event) =>
   finally { setBusy(button, false); }
 });
 
-// ---------- Mira Muse: local idea helper ----------
-const helperInput = document.getElementById("helper-input");
-const helperResults = document.getElementById("helper-results");
-const helperStatus = document.getElementById("helper-status");
-const helperGo = document.getElementById("helper-go-btn");
-let helperMode = "rephrase";
-
-const helperFieldSets = [
-  { name:"sports", test:/baseball|softball|soccer|basketball|football|tennis|climbing|running|swim|skate|ski|golf|disc golf|longboard|cycling|sports/i,
-    want:["find a practice partner","join a beginner-friendly group","get feedback on technique","build a consistent practice routine","learn drills from someone experienced"],
-    offer:["practice with a beginner","share drills and technique tips","help someone build a routine","give friendly feedback","teach the basics"],
-    subjects:["training partners","practice sessions","skill-building","beginner coaching"] },
-  { name:"learning", test:/math|algebra|calculus|science|chemistry|physics|biology|history|economics|coding|programming|school|study|homework|research/i,
-    want:["find a study partner","work through examples together","get help with the tricky parts","practice with someone at a similar level","turn the topic into a small project"],
-    offer:["study together","explain the basics clearly","work through practice problems","share study strategies","help someone review a topic"],
-    subjects:["study partners","practice sessions","peer tutoring","small projects"] },
-  { name:"creative", test:/art|draw|paint|design|photo|photography|video|film|illustrat|craft|sew|knit|ceramic|music|guitar|piano|sing|instrument|band/i,
-    want:["find a creative collaborator","get feedback on a project","practice with someone who shares the interest","learn a technique from another maker","start a small collaborative project"],
-    offer:["share creative feedback","collaborate on a small project","teach a beginner technique","practice together","help someone develop an idea"],
-    subjects:["creative collaboration","project feedback","skill swaps","practice sessions"] },
-  { name:"language", test:/language|spanish|french|chinese|mandarin|japanese|korean|english|german|italian|conversation/i,
-    want:["find a conversation partner","practice casually with someone","build confidence speaking","trade language practice","learn useful everyday phrases"],
-    offer:["practice conversation","help with everyday vocabulary","trade language practice","give friendly pronunciation feedback","chat at a comfortable beginner pace"],
-    subjects:["conversation partners","language exchanges","pronunciation practice","everyday vocabulary"] },
-  { name:"food", test:/cook|bake|food|recipe|chef|cooking|bread|ferment|coffee|tea|latte/i,
-    want:["swap recipes and techniques","cook alongside someone","learn a beginner-friendly technique","get feedback on a recipe","try a small cooking project together"],
-    offer:["share recipes and techniques","cook alongside a beginner","teach a simple technique","swap meal ideas","help troubleshoot a recipe"],
-    subjects:["recipe swaps","cooking sessions","technique sharing","small food projects"] },
-  { name:"outdoors", test:/travel|trip|hike|camp|outdoor|garden|bonsai|bird|beehive|aquaponic|compost|nature|telescope/i,
-    want:["find someone to explore with","learn practical beginner tips","plan a small outdoor project","get advice from someone experienced","join a local-interest activity"],
-    offer:["share practical beginner tips","plan an activity together","teach the basics","help with setup and troubleshooting","share experience from a similar project"],
-    subjects:["activity partners","beginner guidance","project planning","local-interest groups"] },
-];
-
-function normalizeHelperText(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
-function sentenceCase(value) { const t = normalizeHelperText(value); return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
-function detectHelperField(text) { return helperFieldSets.find((item) => item.test.test(text)); }
-function helperTopic(text) {
-  return normalizeHelperText(text).replace(/[.!?]+$/, "").replace(/^(i\s+(want|need|would like|am looking for|can|offer|teach)|i'm\s+looking for|looking for)\s+/i, "").trim() || "a new skill";
-}
-function genericField() {
-  return { name:"general", want:["find someone interested too","learn from someone with experience","practice with a partner","turn the idea into a small project","get feedback and practical tips"], offer:["share what I know","practice with someone who is learning","give beginner-friendly guidance","swap ideas and resources","help someone get started"], subjects:["practice partners","skill swaps","beginner sessions","collaborative projects"] };
-}
-function helperBaseIdeas(text, perspective="want") {
-  const topic = helperTopic(text); const field = detectHelperField(text) || genericField();
-  const pool = perspective === "offer" ? field.offer : field.want;
-  return [
-    ...pool.slice(0,5).map((action) => perspective === "offer" ? `I can ${action} around ${topic}.` : `I want to ${action} around ${topic}.`),
-    ...field.subjects.slice(0,3).map((subject) => perspective === "offer" ? `I can offer a ${subject} focused on ${topic}.` : `I'd like to find ${subject} related to ${topic}.`),
-  ];
-}
-function finishIdeas(text) {
-  const base = sentenceCase(normalizeHelperText(text)).replace(/[.!?]+$/, "");
-  if (!base) return helperBaseIdeas("a new skill");
-  const lower = base.toLowerCase();
-  const endings = lower.startsWith("i want") || lower.startsWith("i'd like")
-    ? [" so I can practice and improve.", " with someone at a similar level.", " and make it practical for a real project.", " while keeping it relaxed and beginner-friendly.", " and meet someone who is interested too.", " with a clear first step I can try this week."]
-    : lower.startsWith("i can") || lower.startsWith("i offer")
-      ? [" for someone who wants to learn and practice.", " and tailor it to a beginner-friendly level.", " while keeping it practical and easy to follow.", " through a short hands-on session.", " and share a few resources to get started.", " with room for questions and feedback."]
-      : [" as a skill I can learn or share.", " with someone who can exchange ideas and feedback.", " through a small, practical project.", " in a relaxed, beginner-friendly way.", " with a clear first step and a simple goal.", " by finding someone interested in the same topic."];
-  return endings.map((end) => `${base}${end}`);
-}
-function rephraseIdeas(text) {
-  const topic = helperTopic(text); const field = detectHelperField(text);
-  const core = [
-    `I'd like to explore ${topic} with someone who is interested too.`,
-    `I'm looking for a chance to learn, practice, or share ${topic}.`,
-    `I want to turn ${topic} into a clear, specific activity I can pursue.`,
-    `I'd love to connect with someone who can exchange practical ideas about ${topic}.`,
-    `I'm interested in a beginner-friendly way to learn more about ${topic}.`,
-  ];
-  if (field) core.push(`I'd like to find a ${field.subjects[0]} focused on ${topic}.`);
-  return core;
-}
-function brainstormIdeas(text) {
-  const topic = helperTopic(text); const field = detectHelperField(text) || genericField();
-  const wants = field.want.slice(0,5).map((x) => `Want: ${sentenceCase(x)} around ${topic}.`);
-  const offers = field.offer.slice(0,5).map((x) => `Offer: ${sentenceCase(x)} around ${topic}.`);
-  const collaborations = [
-    `Collaborate: build a small ${topic} project together.`,
-    `Exchange: trade tips, resources, or practice time around ${topic}.`,
-    `Meet: find a local or online group interested in ${topic}.`,
-    `Challenge: set a simple 7-day goal connected to ${topic}.`,
-    `Teach-back: learn ${topic} and explain one useful part to someone else.`,
-  ];
-  return [...wants, ...offers, ...collaborations];
-}
-function diversifyIdeas(ideas, limit=8) {
-  const seen = new Set();
-  return ideas.map(normalizeHelperText).filter((idea) => {
-    const key = idea.toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-    if (!key || seen.has(key)) return false; seen.add(key); return true;
-  }).slice(0, limit);
-}
-function renderHelperIdeas(ideas) {
-  helperResults.innerHTML = ideas.map((idea, index) => `
-    <article class="helper-card" style="animation-delay:${index * 55}ms">
-      <span class="helper-card-tag">Idea ${index + 1}</span>
-      <p>${escapeHtml(idea)}</p>
-      <div class="helper-card-actions">
-        <button type="button" class="helper-use" data-helper-idea="${escapeHtml(idea)}">Use in draft</button>
-        <button type="button" class="helper-copy" data-helper-copy="${escapeHtml(idea)}">Copy</button>
-      </div>
-    </article>`).join("");
-  helperResults.querySelectorAll("[data-helper-idea]").forEach((btn) => btn.addEventListener("click", () => {
-    const idea = btn.getAttribute("data-helper-idea") || "";
-    const target = document.getElementById("want-text");
-    target.value = idea;
-    draftArea.hidden = false;
-    if (!draftArea.dataset.phrase) draftArea.dataset.phrase = helperInput.value.trim();
-    setStatus(document.getElementById("create-status"), "Idea placed in the Want draft — edit it freely.", "success");
-    target.focus();
-    showToast("Added to your Want draft.", "success");
-  }));
-  helperResults.querySelectorAll("[data-helper-copy]").forEach((btn) => btn.addEventListener("click", async () => {
-    const text = btn.getAttribute("data-helper-copy") || "";
-    try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; setTimeout(() => btn.textContent = "Copy", 900); }
-    catch { showToast("Could not copy that idea.", "error"); }
-  }));
-}
-function runHelper() {
-  const text = normalizeHelperText(helperInput.value);
-  if (!text) { helperStatus.textContent = "Give me a little spark"; helperInput.focus(); showToast("Type a topic or partly written phrase first.", "error"); return; }
-  helperStatus.textContent = "Exploring possibilities…";
-  const ideas = helperMode === "finish" ? diversifyIdeas(finishIdeas(text), 8)
-    : helperMode === "brainstorm" ? diversifyIdeas(brainstormIdeas(text), 10)
-    : diversifyIdeas(rephraseIdeas(text), 8);
-  helperStatus.textContent = `${ideas.length} ideas ready`;
-  renderHelperIdeas(ideas);
-}
-document.querySelectorAll(".helper-mode").forEach((button) => button.addEventListener("click", () => {
-  helperMode = button.dataset.helperMode || "rephrase";
-  document.querySelectorAll(".helper-mode").forEach((b) => b.classList.toggle("is-active", b === button));
-  helperStatus.textContent = helperMode === "rephrase" ? "Polish the thought" : helperMode === "finish" ? "Complete the thought" : "Make it bigger";
-  if (normalizeHelperText(helperInput.value)) runHelper();
-}));
-helperGo.addEventListener("click", runHelper);
-helperInput.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); runHelper(); } });
-document.querySelectorAll(".helper-quick").forEach((button) => button.addEventListener("click", () => {
-  const source = button.dataset.helperSource;
-  helperInput.value = source === "offer" ? document.getElementById("offer-text").value : source === "want" ? document.getElementById("want-text").value : phraseInput.value;
-  helperInput.focus();
-  helperStatus.textContent = "Nice — I can work from that";
-  runHelper();
-}));
-
-// ---------- file import: activity/topic list -> reviewable wants/offers ----------
-const activityFileInput = document.getElementById("activity-file-input");
-const importDrop = document.getElementById("import-drop");
-const importPreview = document.getElementById("import-preview");
-
-function cleanImportedLine(value) {
-  return normalizeHelperText(String(value || "")
-    .replace(/^\s*(?:[-*•·▪◦‣]|\d+[.)]|\[[ xX]\])\s*/, "")
-    .replace(/^['"`]+|['"`]+$/g, "")
-    .replace(/\s*[,;|]\s*$/, ""));
-}
-
-function parseCsvLines(text) {
-  const rows = [];
-  const lines = String(text || "").split(/\r?\n/).filter((line) => line.trim());
-  for (const line of lines) {
-    const cells = [];
-    let cell = "";
-    let quoted = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"' && line[i + 1] === '"' && quoted) { cell += '"'; i++; continue; }
-      if (ch === '"') { quoted = !quoted; continue; }
-      if (ch === ',' && !quoted) { cells.push(cell.trim()); cell = ""; continue; }
-      cell += ch;
-    }
-    cells.push(cell.trim());
-    rows.push(cells.filter(Boolean));
-  }
-  return rows;
-}
-
-function extractStringsFromJson(value, output = []) {
-  if (typeof value === "string") {
-    const v = cleanImportedLine(value);
-    if (v) output.push(v);
-    return output;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((item) => extractStringsFromJson(item, output));
-    return output;
-  }
-  if (value && typeof value === "object") {
-    const preferredKeys = ["activity", "activities", "subject", "subjects", "topic", "topics", "skill", "skills", "name", "title", "text", "item"];
-    const seen = new Set();
-    for (const key of preferredKeys) {
-      if (Object.prototype.hasOwnProperty.call(value, key)) {
-        extractStringsFromJson(value[key], output);
-        seen.add(key);
-      }
-    }
-    for (const [key, nested] of Object.entries(value)) {
-      if (!seen.has(key)) extractStringsFromJson(nested, output);
-    }
-  }
-  return output;
-}
-
-function extractImportedTopics(filename, text) {
-  const ext = (filename.split(".").pop() || "").toLowerCase();
-  let topics = [];
-  if (ext === "json") {
-    try { topics = extractStringsFromJson(JSON.parse(text)); }
-    catch { topics = String(text).split(/\r?\n/).map(cleanImportedLine); }
-  } else if (ext === "csv") {
-    const rows = parseCsvLines(text);
-    const headers = (rows[0] || []).map((h) => h.toLowerCase());
-    const preferred = headers.findIndex((h) => /activity|subject|topic|skill|name|title|interest/.test(h));
-    topics = rows.slice(preferred >= 0 ? 1 : 0).map((row) => cleanImportedLine(row[preferred >= 0 ? preferred : 0] || row.find(Boolean)));
-  } else {
-    topics = String(text).split(/\r?\n|;/).map(cleanImportedLine);
-  }
-  const blocked = new Set(["activity", "activities", "subject", "subjects", "topic", "topics", "skill", "skills", "name", "title", "item", "items"]);
-  return [...new Set(topics.map((topic) => normalizeHelperText(topic)).filter((topic) => topic.length >= 2 && topic.length <= 180 && !blocked.has(topic.toLowerCase())))].slice(0, 60);
-}
-
-function importedWant(topic) {
-  const t = topic.replace(/[.!?]+$/, "");
-  if (/^(i\s+want|i\'d\s+like|looking\s+for|need|i\s+am\s+looking)/i.test(t)) return sentenceCase(t) + (/[.!?]$/.test(t) ? "" : ".");
-  return `I want to explore ${lowerFirst(t)}.`;
-}
-function importedOffer(topic) {
-  const t = topic.replace(/[.!?]+$/, "");
-  if (/^(i\s+can|i\s+offer|happy\s+to|i\s+teach)/i.test(t)) return sentenceCase(t) + (/[.!?]$/.test(t) ? "" : ".");
-  return `I can help with ${lowerFirst(t)}.`;
-}
-
-function importedCandidates(topics) {
-  return topics.flatMap((topic, index) => [
-    { id: `${index}-want`, type: "want", text: importedWant(topic), source: topic },
-    { id: `${index}-offer`, type: "offer", text: importedOffer(topic), source: topic },
-  ]);
-}
-
-function renderImportPreview(filename, topics) {
-  if (!topics.length) {
-    importPreview.hidden = false;
-    importPreview.innerHTML = `<div class="import-empty">I couldn't find any usable activity or subject lines in <strong>${escapeHtml(filename)}</strong>. Try a TXT/MD list, a simple CSV column, or a JSON array of topics.</div>`;
-    return;
-  }
-  const candidates = importedCandidates(topics);
-  importPreview.hidden = false;
-  importPreview.innerHTML = `
-    <div class="import-preview-head">
-      <div><div class="import-preview-title">${escapeHtml(filename)}</div><div class="import-preview-meta">${topics.length} topics · ${candidates.length} draft ideas</div></div>
-      <button type="button" class="btn-text" id="import-clear-btn">clear</button>
-    </div>
-    <div class="import-candidate-list" id="import-candidate-list">
-      ${candidates.map((candidate) => `
-        <label class="import-candidate" data-candidate-id="${candidate.id}">
-          <input class="import-check" type="checkbox" checked data-import-check="${candidate.id}" />
-          <span>
-            <span class="import-candidate-text" data-import-text="${candidate.id}">${escapeHtml(candidate.text)}</span>
-            <span class="import-candidate-source">from: ${escapeHtml(candidate.source)}</span>
-          </span>
-          <span class="import-type-toggle" role="group" aria-label="Choose type">
-            <button type="button" class="is-active ${candidate.type}" data-import-type="${candidate.id}" data-type="${candidate.type}">${candidate.type === "want" ? "Want" : "Offer"}</button>
-            <button type="button" data-import-type="${candidate.id}" data-type="${candidate.type === "want" ? "offer" : "want"}">${candidate.type === "want" ? "Offer" : "Want"}</button>
-          </span>
-        </label>`).join("")}
-    </div>
-    <div class="import-save-row">
-      <button type="button" class="btn btn-secondary" id="import-select-all-btn">Select all</button>
-      <button type="button" class="btn btn-primary" id="import-save-btn"><span>Add selected to bank</span><span class="btn-arrow">↓</span></button>
-    </div>`;
-
-  document.getElementById("import-clear-btn").addEventListener("click", () => {
-    importPreview.hidden = true;
-    importPreview.innerHTML = "";
-    activityFileInput.value = "";
-  });
-  document.getElementById("import-select-all-btn").addEventListener("click", (event) => {
-    const checks = [...importPreview.querySelectorAll(".import-check")];
-    const allChecked = checks.every((check) => check.checked);
-    checks.forEach((check) => { check.checked = !allChecked; });
-    event.currentTarget.textContent = allChecked ? "Select all" : "Clear all";
-  });
-  importPreview.querySelectorAll("[data-import-type]").forEach((button) => button.addEventListener("click", (event) => {
-    event.preventDefault();
-    const group = button.closest(".import-type-toggle");
-    group.querySelectorAll("button").forEach((b) => b.classList.remove("is-active", "want", "offer"));
-    button.classList.add("is-active", button.dataset.type);
-    const id = button.dataset.importType;
-    const textEl = importPreview.querySelector(`[data-import-text="${CSS.escape(id)}"]`);
-    const source = importPreview.querySelector(`[data-candidate-id="${CSS.escape(id)}"] .import-candidate-source`)?.textContent.replace(/^from:\s*/i, "") || "";
-    if (textEl) textEl.textContent = button.dataset.type === "want" ? importedWant(source) : importedOffer(source);
-  }));
-  document.getElementById("import-save-btn").addEventListener("click", saveImportedCandidates);
-}
-
-async function saveImportedCandidates(event) {
-  const button = event.currentTarget;
-  const items = [];
-  importPreview.querySelectorAll(".import-candidate").forEach((row) => {
-    const check = row.querySelector(".import-check");
-    const activeType = row.querySelector(".import-type-toggle .is-active");
-    const text = row.querySelector(".import-candidate-text")?.textContent.trim();
-    const source = row.querySelector(".import-candidate-source")?.textContent.replace(/^from:\s*/i, "").trim();
-    if (check?.checked && activeType && text) items.push({ text, type: activeType.dataset.type, source_phrase: source || null });
-  });
-  if (!items.length) { showToast("Select at least one idea to import.", "error"); return; }
-  setBusy(button, true, "Adding…");
-  try {
-    await api("/items", { method: "POST", body: JSON.stringify({ items }) });
-    showToast(`${items.length} imported item${items.length === 1 ? "" : "s"} added to the bank.`, "success");
-    setStatus(document.getElementById("create-status"), `Added ${items.length} reviewed ideas from the uploaded list.`, "success");
-    importPreview.hidden = true;
-    importPreview.innerHTML = "";
-    activityFileInput.value = "";
-    await loadItems();
-  } catch (error) {
-    showToast(error.message, "error");
-  } finally { setBusy(button, false); }
-}
-
-async function handleActivityFile(file) {
-  if (!file) return;
-  const allowed = /\.(txt|md|csv|json)$/i.test(file.name);
-  if (!allowed) {
-    importPreview.hidden = false;
-    importPreview.innerHTML = `<div class="import-error">That file type isn't supported yet. Use a TXT, MD, CSV, or JSON activity/subject list.</div>`;
-    return;
-  }
-  try {
-    const text = await file.text();
-    const topics = extractImportedTopics(file.name, text);
-    renderImportPreview(file.name, topics);
-    if (topics.length) showToast(`Found ${topics.length} usable topics.`, "success");
-  } catch (error) {
-    importPreview.hidden = false;
-    importPreview.innerHTML = `<div class="import-error">I couldn't read that file. Try saving the list as TXT, CSV, MD, or JSON.</div>`;
-  }
-}
-
-activityFileInput?.addEventListener("change", () => handleActivityFile(activityFileInput.files?.[0]));
-["dragenter", "dragover"].forEach((type) => importDrop?.addEventListener(type, (event) => {
-  event.preventDefault(); importDrop.classList.add("is-dragging");
-}));
-["dragleave", "drop"].forEach((type) => importDrop?.addEventListener(type, (event) => {
-  event.preventDefault(); importDrop.classList.remove("is-dragging");
-}));
-importDrop?.addEventListener("drop", (event) => handleActivityFile(event.dataTransfer?.files?.[0]));
-
 // ---------- gentle interactivity ----------
 document.querySelectorAll(".btn, .suggestion-chip, .preset-btn, .icon-btn").forEach((button) => {
   button.addEventListener("pointerdown", (event) => {
@@ -1156,25 +796,17 @@ document.querySelectorAll(".btn, .suggestion-chip, .preset-btn, .icon-btn").forE
 });
 const rippleStyle = document.createElement("style"); rippleStyle.textContent = "@keyframes ripple { to { transform: scale(1); opacity: 0; } }"; document.head.appendChild(rippleStyle);
 
-// ---------- spark mascot micro-interactions (visual only) ----------
+// ---------- playful spinner micro-interaction ----------
 (function () {
-  const sparkBtn = document.getElementById("mascot-spark");
-  if (!sparkBtn) return;
-  const helperStatusEl = document.getElementById("helper-status");
-  function pulse() {
-    sparkBtn.classList.remove("is-spinning");
-    void sparkBtn.offsetWidth; // restart animation
-    sparkBtn.classList.add("is-spinning");
-  }
-  sparkBtn.addEventListener("animationend", () => sparkBtn.classList.remove("is-spinning"));
-  sparkBtn.addEventListener("click", () => {
-    pulse();
-    if (helperGoBtn) helperGoBtn.click();
-    else helperInput?.focus();
-  });
-  if (helperStatusEl && "MutationObserver" in window) {
-    new MutationObserver(pulse).observe(helperStatusEl, { childList: true, characterData: true, subtree: true });
-  }
+  const spinner = document.getElementById("fun-spinner");
+  if (!spinner) return;
+  const pulse = () => {
+    spinner.classList.remove("is-spinning");
+    void spinner.offsetWidth;
+    spinner.classList.add("is-spinning");
+  };
+  spinner.addEventListener("animationend", () => spinner.classList.remove("is-spinning"));
+  spinner.addEventListener("click", pulse);
 })();
 
 // ---------- bootstrap ----------

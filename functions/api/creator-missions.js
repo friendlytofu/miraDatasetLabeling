@@ -40,6 +40,10 @@ async function ensureTables(env) {
     pairs_total INTEGER NOT NULL DEFAULT 0
   )`).run();
   await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_pairs_owner_created ON creator_pairs(owner, created_at DESC)").run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS active_creator_missions (
+    owner TEXT PRIMARY KEY, goal INTEGER NOT NULL, flag TEXT NOT NULL, started_at TEXT NOT NULL,
+    starting_pairs INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL
+  )`).run();
   await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_mission_history_owner_completed ON creator_mission_history(owner, completed_at DESC)").run();
 }
 
@@ -66,10 +70,15 @@ function themeOf(text) {
   const value = String(text || '').toLocaleLowerCase();
   return THEME_RULES.find(([, rule]) => rule.test(value))?.[0] || 'General & everyday';
 }
-async function qualityStats(env, owner) {
-  const uniqueRow = await env.DB.prepare("SELECT COUNT(*) AS total FROM creator_pairs WHERE owner=?").bind(owner).first();
-  const eventRow = await env.DB.prepare("SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events WHERE owner=?").bind(owner).first();
-  const pairs = (await env.DB.prepare("SELECT offer_text,want_text FROM creator_pairs WHERE owner=? ORDER BY id DESC LIMIT 10000").bind(owner).all()).results || [];
+async function qualityStats(env, owner = null) {
+  const pairWhere = owner ? " WHERE owner=?" : "";
+  const eventWhere = owner ? " WHERE owner=?" : "";
+  const pairBind = owner ? [owner] : [];
+  const eventBind = owner ? [owner] : [];
+  const uniqueRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM creator_pairs${pairWhere}`).bind(...pairBind).first();
+  const eventRow = await env.DB.prepare(`SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events${eventWhere}`).bind(...eventBind).first();
+  // Intentionally analyze every saved pair; this is the source of truth for the quality dashboard.
+  const pairs = (await env.DB.prepare(`SELECT offer_text,want_text FROM creator_pairs${pairWhere} ORDER BY id ASC`).bind(...pairBind).all()).results || [];
   const attempts = Number(eventRow?.attempts || 0);
   const duplicates = Number(eventRow?.duplicates || 0);
   const totalWords = pairs.reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
@@ -79,16 +88,46 @@ async function qualityStats(env, owner) {
     offerThemes[ot] = (offerThemes[ot] || 0) + 1;
     wantThemes[wt] = (wantThemes[wt] || 0) + 1;
   }
-  const top = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([theme,count])=>({theme,count,share:pairs.length ? Math.round(count/pairs.length*100) : 0}));
+  const top = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([theme,count])=>({theme,count,share:pairs.length ? Math.round(count/pairs.length*1000)/10 : 0}));
   return { unique_pairs:Number(uniqueRow?.total || 0), attempts, duplicates, duplicate_rate: attempts ? Math.round(duplicates/attempts*1000)/10 : 0, average_pair_words:pairs.length ? Math.round(totalWords/pairs.length*10)/10 : 0, offer_themes:top(offerThemes), want_themes:top(wantThemes) };
+}
+
+async function saveQualitySnapshot(env, scope = 'all', owner = null) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_quality_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL DEFAULT 'all', owner TEXT,
+    captured_at TEXT NOT NULL, total_pairs INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
+    duplicates INTEGER NOT NULL DEFAULT 0, duplicate_rate REAL NOT NULL DEFAULT 0, average_pair_words REAL NOT NULL DEFAULT 0,
+    offer_themes TEXT NOT NULL DEFAULT '[]', want_themes TEXT NOT NULL DEFAULT '[]'
+  )`).run();
+  const q = await qualityStats(env, owner);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+    .bind(scope, owner, now, q.unique_pairs, q.attempts, q.duplicates, q.duplicate_rate, q.average_pair_words, JSON.stringify(q.offer_themes), JSON.stringify(q.want_themes)).run();
+  return { ...q, captured_at: now };
+}
+
+async function qualityTrend(env, scope = 'all', owner = null) {
+  const rows = (await env.DB.prepare("SELECT captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words FROM creator_quality_snapshots WHERE scope=? AND ((owner IS NULL AND ? IS NULL) OR owner=?) ORDER BY captured_at DESC LIMIT 30").bind(scope, owner, owner).all()).results || [];
+  return rows.reverse();
 }
 
 export async function onRequestGet({ request, env }) {
   await ensureTables(env);
-  const owner = ownerOf(new URL(request.url).searchParams.get("owner"));
-  const presets = (await env.DB.prepare("SELECT * FROM creator_mission_presets WHERE owner=? ORDER BY updated_at DESC, id DESC").bind(owner).all()).results;
-  const history = (await env.DB.prepare("SELECT * FROM creator_mission_history WHERE owner=? ORDER BY completed_at DESC, id DESC LIMIT 100").bind(owner).all()).results;
-  return json({ presets, history, pairTotal: await pairCount(env, owner), quality: await qualityStats(env, owner) });
+  const url = new URL(request.url);
+  const ownerParam = url.searchParams.get("owner");
+  const owner = ownerParam ? ownerOf(ownerParam) : null;
+  const presets = owner ? (await env.DB.prepare("SELECT * FROM creator_mission_presets WHERE owner=? ORDER BY updated_at DESC, id DESC").bind(owner).all()).results : [];
+  const history = owner ? (await env.DB.prepare("SELECT * FROM creator_mission_history WHERE owner=? ORDER BY completed_at DESC, id DESC LIMIT 100").bind(owner).all()).results : [];
+  const active = owner ? await env.DB.prepare("SELECT * FROM active_creator_missions WHERE owner=?").bind(owner).first() : null;
+  const scope = owner ? "owner" : "all";
+  let quality = await qualityStats(env, owner);
+  let trend = await qualityTrend(env, scope, owner);
+  if (!trend.length && quality.unique_pairs) {
+    const snap = await saveQualitySnapshot(env, scope, owner);
+    quality = snap;
+    trend = [snap];
+  }
+  return json({ presets, history, active: active || null, pairTotal: quality.unique_pairs, quality, trend });
 }
 
 export async function onRequestPost({ request, env }) {
@@ -105,6 +144,8 @@ export async function onRequestPost({ request, env }) {
     const key = pairKey(offer, want);
     const result = await env.DB.prepare("INSERT OR IGNORE INTO creator_pairs(owner,pair_key,offer_text,want_text,created_at) VALUES (?,?,?,?,?)")
       .bind(owner, key, offer, want, now).run();
+    await saveQualitySnapshot(env, "owner", owner);
+    await saveQualitySnapshot(env, "all", null);
     return json({ recorded: Number(result.meta.changes || 0) > 0, pairTotal: await pairCount(env, owner) });
   }
 
@@ -129,7 +170,10 @@ export async function onRequestPost({ request, env }) {
     const goal = Math.max(1, Math.min(10000, Number(body.goal) || 0));
     const flag = String(body.flag || "✦").slice(0, 4);
     if (!goal) return errorJson("Need a mission goal.");
-    return json({ mission: { owner, goal, flag, started_at: now, starting_pairs: await pairCount(env, owner) } });
+    const startingPairs = await pairCount(env, owner);
+    await env.DB.prepare("INSERT OR REPLACE INTO active_creator_missions(owner,goal,flag,started_at,starting_pairs,updated_at) VALUES (?,?,?,?,?,?)")
+      .bind(owner,goal,flag,now,startingPairs,now).run();
+    return json({ mission: { owner, goal, flag, started_at: now, starting_pairs: startingPairs } });
   }
 
   if (body.action === "complete") {
@@ -142,6 +186,7 @@ export async function onRequestPost({ request, env }) {
     if (pairsThisMission < goal) return errorJson(`Mission is not complete yet: ${pairsThisMission}/${goal} pairs written.`);
     const result = await env.DB.prepare(`INSERT INTO creator_mission_history(owner,goal,flag,started_at,completed_at,starting_pairs,pairs_total) VALUES (?,?,?,?,?,?,?)`)
       .bind(owner, goal, flag, startedAt, now, startingPairs, pairsThisMission).run();
+    await env.DB.prepare("DELETE FROM active_creator_missions WHERE owner=?").bind(owner).run();
     return json({ id: result.meta.last_row_id, owner, goal, flag, started_at: startedAt, completed_at: now, starting_pairs: startingPairs, pairs_total: pairsThisMission });
   }
 

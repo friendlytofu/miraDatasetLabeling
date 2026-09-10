@@ -60,6 +60,27 @@ export async function onRequestPost({ request, env }) {
       await env.DB.prepare("INSERT INTO creator_pair_events(owner,pair_key,offer_text,want_text,is_duplicate,created_at) VALUES (?,?,?,?,?,?)")
         .bind(owner, pairKey, offer, want, recorded ? 0 : 1, now).run();
       const countRow = await env.DB.prepare("SELECT COUNT(*) AS total FROM creator_pairs WHERE owner=?").bind(owner).first();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_quality_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL DEFAULT 'all', owner TEXT,
+        captured_at TEXT NOT NULL, total_pairs INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
+        duplicates INTEGER NOT NULL DEFAULT 0, duplicate_rate REAL NOT NULL DEFAULT 0, average_pair_words REAL NOT NULL DEFAULT 0,
+        offer_themes TEXT NOT NULL DEFAULT '[]', want_themes TEXT NOT NULL DEFAULT '[]'
+      )`).run();
+      const pairRows = (await env.DB.prepare("SELECT offer_text,want_text FROM creator_pairs WHERE owner=? ORDER BY id ASC").bind(owner).all()).results || [];
+      const events = await env.DB.prepare("SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events WHERE owner=?").bind(owner).first();
+      const words = pairRows.reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
+      const snapNow = new Date().toISOString();
+      const avg = pairRows.length ? Math.round(words / pairRows.length * 10) / 10 : 0;
+      const dupRate = Number(events?.attempts || 0) ? Math.round(Number(events?.duplicates || 0) / Number(events.attempts) * 1000) / 10 : 0;
+      await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES ('owner',?,?,?,?,?, '[]','[]')`)
+        .bind(owner,snapNow,pairRows.length,Number(events?.attempts || 0),Number(events?.duplicates || 0),dupRate,avg).run();
+      const allPairs = await env.DB.prepare("SELECT offer_text,want_text FROM creator_pairs").all();
+      const allEvents = await env.DB.prepare("SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events").first();
+      const allWords = (allPairs.results || []).reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
+      const allAvg = allPairs.results?.length ? Math.round(allWords / allPairs.results.length * 10) / 10 : 0;
+      const allDupRate = Number(allEvents?.attempts || 0) ? Math.round(Number(allEvents?.duplicates || 0) / Number(allEvents.attempts) * 1000) / 10 : 0;
+      await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES ('all',NULL,?,?,?,?,?,?, '[]','[]')`)
+        .bind(snapNow,allPairs.results?.length || 0,Number(allEvents?.attempts || 0),Number(allEvents?.duplicates || 0),allDupRate,allAvg).run();
       creatorPairResult = { recorded, duplicate: !recorded, pairTotal: Number(countRow?.total || 0) };
     }
   }

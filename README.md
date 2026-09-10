@@ -95,8 +95,7 @@ wrangler pages dev . --d1=DB=mira-labeling-db
   labeler name (persisted in the browser), `labeled_blind: true`, and a
   real timestamp captured at click time in the labeler's own local time
   zone.
-- **Export** — downloads every labeled entry as a JSON array in the target
-  format, with `id` renumbered sequentially from 0.
+- **Export** — downloads every labeled entry as JSONL, one compact JSON object per line, with `id` renumbered sequentially from 0.
 
 ## What's new in this version
 
@@ -127,19 +126,3 @@ wrangler pages dev . --d1=DB=mira-labeling-db
 - `labeled_blind` is always recorded as `true`: the labeler only ever sees
   the offer/want text, never a suggested answer.
 
-## Activity list import
-
-The Mira Muse helper can import a simple activity/topic list directly in the browser. Supported formats are TXT, Markdown, CSV, and JSON; the importer detects activity/subject/topic/skill-like values, creates paired Want and Offer drafts, and lets you review, switch type, select, and edit the generated text before explicitly adding it to the existing item bank.
-
-Imports are non-destructive: merely uploading a file does not create database records.
-
-
-### Label management
-The Label tab now supports back/forward navigation, changing an existing label, resetting an entry to unlabeled, permanent deletion, and a timestamped label-history view. History is stored in the D1 `label_history` table.
-
-### Export format
-Dataset export is JSONL: exactly one compact JSON object per line, saved as `.jsonl`, with no pretty-printed multi-line records.
-
-
-### Creation missions
-The Create workspace includes a separate mission tracker for writing distinct offer + want pairs. Goals and flag choices can be saved as presets, and completed creation missions are stored with their date, goal, and number of new unique pairs written. A pair counts only when both sides are saved together from the drafting desk; repeated identical pairs for the same labeler are not counted again.

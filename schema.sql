@@ -41,28 +41,6 @@ CREATE TABLE IF NOT EXISTS label_history (
 CREATE INDEX IF NOT EXISTS idx_label_history_entry ON label_history(entry_id, acted_at DESC);
 
 
-CREATE TABLE IF NOT EXISTS mission_presets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  owner TEXT NOT NULL DEFAULT 'default',
-  name TEXT NOT NULL,
-  goal INTEGER NOT NULL,
-  flag TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS mission_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  owner TEXT NOT NULL DEFAULT 'default',
-  goal INTEGER NOT NULL,
-  flag TEXT NOT NULL,
-  started_at TEXT NOT NULL,
-  completed_at TEXT NOT NULL,
-  starting_labeled INTEGER NOT NULL DEFAULT 0,
-  labeled_total INTEGER NOT NULL DEFAULT 0,
-  generated_total INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_mission_history_completed ON mission_history(completed_at DESC);
 
 CREATE TABLE IF NOT EXISTS creator_pairs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,3 +74,28 @@ CREATE TABLE IF NOT EXISTS creator_mission_history (
   pairs_total INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_creator_mission_history_owner_completed ON creator_mission_history(owner, completed_at DESC);
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name_ci ON users(lower(name));
+
+CREATE TABLE IF NOT EXISTS creator_quality_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scope TEXT NOT NULL DEFAULT 'all', owner TEXT,
+  captured_at TEXT NOT NULL, total_pairs INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0, duplicates INTEGER NOT NULL DEFAULT 0,
+  duplicate_rate REAL NOT NULL DEFAULT 0, average_pair_words REAL NOT NULL DEFAULT 0,
+  offer_themes TEXT NOT NULL DEFAULT '[]', want_themes TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS idx_creator_quality_scope_time ON creator_quality_snapshots(scope, owner, captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS active_creator_missions (
+  owner TEXT PRIMARY KEY, goal INTEGER NOT NULL, flag TEXT NOT NULL, started_at TEXT NOT NULL,
+  starting_pairs INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL
+);
