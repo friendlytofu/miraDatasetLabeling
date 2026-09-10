@@ -72,7 +72,7 @@ export async function onRequestPost({ request, env }) {
       const snapNow = new Date().toISOString();
       const avg = pairRows.length ? Math.round(words / pairRows.length * 10) / 10 : 0;
       const dupRate = Number(events?.attempts || 0) ? Math.round(Number(events?.duplicates || 0) / Number(events.attempts) * 1000) / 10 : 0;
-      await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES ('owner',?,?,?,?,?, '[]','[]')`)
+      await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES ('owner',?,?,?,?,?,?, '[]','[]')`)
         .bind(owner,snapNow,pairRows.length,Number(events?.attempts || 0),Number(events?.duplicates || 0),dupRate,avg).run();
       const allPairs = await env.DB.prepare("SELECT offer_text,want_text FROM creator_pairs").all();
       const allEvents = await env.DB.prepare("SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events").first();

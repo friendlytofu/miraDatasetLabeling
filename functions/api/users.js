@@ -1,6 +1,9 @@
 import { json, errorJson, sha256Hex } from "../_utils.js";
 
 async function ensureTables(env) {
+  // Users is also the entry point for the team dashboard. Make the small set of
+  // referenced creator tables available here too, so /api/users never fails just
+  // because a deployment has not run every migration yet.
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -10,6 +13,21 @@ async function ensureTables(env) {
     active INTEGER NOT NULL DEFAULT 1
   )`).run();
   await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name_ci ON users(lower(name))").run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_pairs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL DEFAULT 'default',
+    pair_key TEXT NOT NULL, offer_text TEXT NOT NULL, want_text TEXT NOT NULL,
+    created_at TEXT NOT NULL, UNIQUE(owner, pair_key)
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_pair_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL DEFAULT 'default',
+    pair_key TEXT NOT NULL, offer_text TEXT NOT NULL, want_text TEXT NOT NULL,
+    is_duplicate INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_mission_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL DEFAULT 'default', goal INTEGER NOT NULL,
+    flag TEXT NOT NULL, started_at TEXT NOT NULL, completed_at TEXT NOT NULL,
+    starting_pairs INTEGER NOT NULL DEFAULT 0, pairs_total INTEGER NOT NULL DEFAULT 0
+  )`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS active_creator_missions (
     owner TEXT PRIMARY KEY, goal INTEGER NOT NULL, flag TEXT NOT NULL, started_at TEXT NOT NULL,
     starting_pairs INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL

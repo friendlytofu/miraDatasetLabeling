@@ -55,6 +55,46 @@ async function pairCount(env, owner) {
   return Number(row?.total || 0);
 }
 
+// Older versions stored authored offers/wants only in items. Reconstruct the
+// one-to-one pairs that can be proven from a shared source_phrase so the quality
+// dashboard analyzes the existing bank, not only pairs created after this feature.
+async function backfillLegacyPairs(env) {
+  const rows = (await env.DB.prepare(`
+    SELECT id, text, type, source_phrase, created_at
+    FROM items
+    WHERE source_phrase IS NOT NULL AND TRIM(source_phrase) <> ''
+    ORDER BY source_phrase, id
+  `).all()).results || [];
+  if (!rows.length) return 0;
+  const groups = new Map();
+  for (const row of rows) {
+    const key = normalize(row.source_phrase);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, { offers: [], wants: [] });
+    groups.get(key)[row.type === 'offer' ? 'offers' : 'wants'].push(row);
+  }
+  let inserted = 0;
+  for (const group of groups.values()) {
+    const count = Math.min(group.offers.length, group.wants.length);
+    for (let i = 0; i < count; i++) {
+      const offer = String(group.offers[i].text || '').trim();
+      const want = String(group.wants[i].text || '').trim();
+      if (!offer || !want) continue;
+      const key = pairKey(offer, want);
+      const result = await env.DB.prepare(
+        `INSERT OR IGNORE INTO creator_pairs(owner,pair_key,offer_text,want_text,created_at) VALUES ('default',?,?,?,?)`
+      ).bind(key, offer, want, group.offers[i].created_at || group.wants[i].created_at || new Date().toISOString()).run();
+      if (Number(result.meta?.changes || 0) > 0) {
+        inserted++;
+        await env.DB.prepare(
+          `INSERT INTO creator_pair_events(owner,pair_key,offer_text,want_text,is_duplicate,created_at) VALUES ('default',?,?,?,?,?)`
+        ).bind(key, offer, want, 0, group.offers[i].created_at || group.wants[i].created_at || new Date().toISOString()).run();
+      }
+    }
+  }
+  return inserted;
+}
+
 const THEME_RULES = [
   ["Teaching & learning", /teach|tutor|lesson|study|learn|homework|class|math|science|history|school|academic|mentor|coach/],
   ["Sports & fitness", /baseball|basketball|soccer|football|tennis|running|fitness|workout|gym|yoga|climb|swim|sport|training/],
@@ -131,6 +171,7 @@ async function qualityTrend(env, scope = 'all', owner = null) {
 
 export async function onRequestGet({ request, env }) {
   await ensureTables(env);
+  await backfillLegacyPairs(env);
   const url = new URL(request.url);
   const ownerParam = url.searchParams.get("owner");
   const owner = ownerParam ? ownerOf(ownerParam) : null;
@@ -150,6 +191,7 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   await ensureTables(env);
+  await backfillLegacyPairs(env);
   const body = await request.json().catch(() => null);
   if (!body?.action) return errorJson("Need an action.");
   const owner = ownerOf(body.owner);
