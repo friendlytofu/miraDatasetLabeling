@@ -158,6 +158,10 @@ textarea { padding: 12px 13px; resize: vertical; min-height: 86px; font-size: .9
 .suggestion-chip:hover, .preset-btn:hover, .preset-btn.is-active { color: var(--teal-deep); border-color: rgba(39,169,145,.35); background: var(--teal-tint); }
 .number-control { display: grid; grid-template-columns: 42px 1fr 42px; gap: 6px; align-items: stretch; }
 .number-control input { text-align: center; }
+
+.balance-target-field input[type="range"] { width: 100%; margin: 8px 0 2px; accent-color: currentColor; }
+.range-labels { display:flex; justify-content:space-between; gap:8px; font-size:11px; opacity:.65; font-family:var(--mono, monospace); }
+.balance-target-field strong { margin-left:6px; font-family:var(--mono, monospace); }
 .stepper-btn { border: 1px solid var(--line-strong); background: #fff; border-radius: 11px; color: #627172; cursor: pointer; font-size: 1rem; transition: .16s ease; }
 .stepper-btn:hover { color: var(--teal-deep); background: var(--teal-tint); border-color: rgba(39,169,145,.32); }
 

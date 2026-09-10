@@ -321,9 +321,9 @@
       <div>
         <span class="section-kicker">02 · COMPOSE THE QUEUE</span>
         <h2>Generate a balanced set of combinations.</h2>
-        <p>Mira rotates through the 1×1 → 3×3 size buckets and targets a 40/60–50/50 Yes/No mix using the source-phrase provenance already attached to your item bank.</p>
+        <p>Mira rotates through the 1×1 → 3×3 size buckets and follows your chosen Yes/No balance using the source-phrase provenance already attached to your item bank.</p>
       </div>
-      <div class="section-badge">40/60–50/50 target</div>
+      <div class="section-badge">40/60–50/50 range</div>
     </div>
     <div class="panel-grid generate-grid">
       <div class="card feature-card">
@@ -344,6 +344,11 @@
           <button class="preset-btn" type="button" data-count="60">60</button>
           <button class="preset-btn" type="button" data-count="120">120</button>
         </div>
+        <label class="field balance-target-field">
+          <span>Target Yes percentage <strong id="gen-yes-pct-value">50%</strong></span>
+          <input id="gen-yes-pct" type="range" min="40" max="60" step="1" value="50" aria-label="Target Yes percentage" />
+          <div class="range-labels"><span>40% Yes / 60% No</span><span>50 / 50</span><span>60% Yes / 40% No</span></div>
+        </label>
         <button id="generate-btn" class="btn btn-primary btn-wide" type="button"><span>Generate combinations</span><span class="btn-arrow">✦</span></button>
         <p id="generate-status" class="status-line" aria-live="polite"></p><div id="generate-balance" class="status-line" aria-live="polite"></div>
       </div>
@@ -352,7 +357,7 @@
         <div class="balance-header">
           <div>
             <h3>Shape of this run</h3>
-            <p class="hint compact">Offers × wants, with the estimated Yes/No balance shown after the run.</p>
+            <p class="hint compact">Offers × wants, with your selected Yes/No target shown after the run.</p>
           </div>
           <div class="balance-total"><span id="generated-total">0</span><small>new</small></div>
         </div>

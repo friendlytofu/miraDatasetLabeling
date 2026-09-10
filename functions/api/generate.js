@@ -63,6 +63,8 @@ function candidateForClass(kind, bucket, offerPool, wantPool, offerGroups, wantG
 export async function onRequestPost({ request, env }) {
   const body = await request.json().catch(() => ({}));
   const requested = Math.max(1, Math.min(1000, Number(body.count) || 30));
+  // User-controlled target. Keep the control in the intended balanced range.
+  const requestedYesPct = Math.max(40, Math.min(60, Number(body.yes_percent) || 50));
 
   const offersRes = await env.DB.prepare("SELECT id, text, source_phrase FROM items WHERE type = 'offer'").all();
   const wantsRes = await env.DB.prepare("SELECT id, text, source_phrase FROM items WHERE type = 'want'").all();
@@ -87,9 +89,9 @@ export async function onRequestPost({ request, env }) {
   let bucketIdx = 0;
   const MAX_ATTEMPTS_PER_TURN = 40;
 
-  // Keep every run in the useful 40/60–50/50 range whenever the item bank has
-  // enough provenance to construct both sides. Prefer exactly 50/50.
-  const preferredYes = Math.round(requested * 0.5);
+  // Honor the user's selected Yes percentage. The UI constrains this to 40–60%,
+  // so every requested target remains inside the intended balanced range.
+  const preferredYes = Math.round(requested * requestedYesPct / 100);
   const minimumYes = Math.ceil(requested * 0.4);
   const maximumYes = Math.floor(requested * 0.6);
   let yesTarget = Math.min(maximumYes, Math.max(minimumYes, preferredYes));
@@ -178,7 +180,7 @@ export async function onRequestPost({ request, env }) {
       no,
       yes_pct: yesPct,
       no_pct: noPct,
-      target: balancedTarget ? "40/60–50/50" : "unclassified",
+      target: balancedTarget ? `${requestedYesPct}/${100-requestedYesPct} Yes/No` : "unclassified",
       basis: balancedTarget ? "source phrase provenance" : "Item bank has insufficient source-phrase provenance"
     }
   });
