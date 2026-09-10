@@ -95,7 +95,7 @@ wrangler pages dev . --d1=DB=mira-labeling-db
   labeler name (persisted in the browser), `labeled_blind: true`, and a
   real timestamp captured at click time in the labeler's own local time
   zone.
-- **Export** — downloads every labeled entry as JSONL, one compact JSON object per line, with `id` renumbered sequentially from 0.
+- **Export** — downloads every labeled entry as training-compatible JSONL, one compact object per line with string `instruction` and `output` fields. Each instruction contains the offers and wants; the output is the human `yes` / `no` decision.
 
 ## What's new in this version
 

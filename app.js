@@ -1188,14 +1188,13 @@ function parseExportText(text) {
   const rows = lines.map((line, i) => {
     let row;
     try { row = JSON.parse(line); } catch { throw new Error(`Line ${i + 1} is not valid JSON.`); }
-    if (!Array.isArray(row.offers) || !row.offers.length) throw new Error(`Line ${i + 1}: offers must be a non-empty array.`);
-    if (!Array.isArray(row.wants) || !row.wants.length) throw new Error(`Line ${i + 1}: wants must be a non-empty array.`);
-    if (row.human_label !== "yes" && row.human_label !== "no") throw new Error(`Line ${i + 1}: human_label must be yes or no.`);
-    if (row.labeler != null && typeof row.labeler !== "string") throw new Error(`Line ${i + 1}: labeler must be text.`);
+    if (typeof row.instruction !== "string" || !row.instruction.trim()) throw new Error(`Line ${i + 1}: instruction must be a non-empty string.`);
+    if (typeof row.output !== "string" || !row.output.trim()) throw new Error(`Line ${i + 1}: output must be a non-empty string.`);
     return row;
   });
   return rows;
 }
+
 function setExportEditorStatus(text, kind="") { if (exportEditorStatus) setStatus(exportEditorStatus, text, kind); }
 async function loadExportEditor() {
   const button = document.getElementById("load-export-editor-btn");
@@ -1204,7 +1203,7 @@ async function loadExportEditor() {
     const res = await fetch("/api/export", { credentials:"same-origin", cache:"no-store" });
     if (!res.ok) { const data = await res.json().catch(()=>({})); throw new Error(data.error || "No labeled export is available yet."); }
     exportEditor.value = await res.text();
-    setExportEditorStatus("Loaded. You can edit the JSONL below, then validate it.", "success");
+    setExportEditorStatus("Loaded training-format JSONL. You can edit instruction/output, then validate it.", "success");
   } catch (error) { setExportEditorStatus(error.message, "error"); }
   finally { setBusy(button, false); }
 }

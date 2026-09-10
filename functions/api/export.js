@@ -77,14 +77,14 @@ export async function onRequestGet({ request, env }) {
     if (cleanRepeated) exportRows = report.cleanRows;
     if (!exportRows.length) return errorJson("The export quality check removed every labeled task. Increase the allowed pair appearances or export without cleaning.", 409);
 
-    const lines = exportRows.map((entry, i) => JSON.stringify({
-      id: i,
-      offers: entry.offers,
-      wants: entry.wants,
-      human_label: entry.row.human_label,
-      labeler: entry.row.labeler,
-      labeled_blind: !!entry.row.labeled_blind,
-      labeled_at: entry.row.labeled_at,
+    // Export in instruction/output JSONL so the file can be imported directly
+    // into training systems that require a string `instruction` and `output`.
+    // The labeling task itself is the instruction; the human decision is the
+    // output. Multiple offers/wants are kept in the instruction rather than
+    // as arrays because the target importer expects strings.
+    const lines = exportRows.map((entry) => JSON.stringify({
+      instruction: buildTrainingInstruction(entry.offers, entry.wants),
+      output: String(entry.row.human_label || "").trim(),
     }));
     const date = new Date().toISOString().slice(0,10);
     const scoped = historyIds.length || entryIds.length ? "selected_" : "";
@@ -100,6 +100,20 @@ export async function onRequestGet({ request, env }) {
     console.error("Export/quality check failed:", error);
     return errorJson(`Quality check failed: ${error?.message || "unexpected server error"}`, 500);
   }
+}
+
+function buildTrainingInstruction(offers, wants) {
+  const offerLines = offers.map((text) => `- ${text}`).join("\n");
+  const wantLines = wants.map((text) => `- ${text}`).join("\n");
+  return [
+    "Decide whether the offers are a good match for the wants. Reply only with yes or no.",
+    "",
+    "Offers:",
+    offerLines || "-",
+    "",
+    "Wants:",
+    wantLines || "-",
+  ].join("\n");
 }
 
 function pairRelationshipsForEntry(entry, repeatedRelationships, maxPairUses) {
