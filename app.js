@@ -539,26 +539,44 @@ function renderQualityTrend(quality){
   const pairs=Number(q.current_pairs ?? q.unique_pairs ?? 0);
   const duplicates=Number(q.duplicates||0);
   const avg=Number(q.average_pair_words||0);
-  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${duplicates.toLocaleString()}</strong><span>repeated current pairs</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Assessed ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. No label history or historical save attempts are included.</div>`;
+  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${duplicates.toLocaleString()}</strong><span>repeated pairs in the current bank</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Re-examined ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. This assessment reads only the current pair bank; label history, save attempts, and old snapshots are excluded.</div>`;
+}
+
+function clearQualityAssessment(){
+  document.getElementById("global-quality-pairs").textContent="—";
+  document.getElementById("global-quality-duplicate").textContent="—";
+  document.getElementById("global-quality-duplicate-detail").textContent="assessment cleared";
+  document.getElementById("global-quality-length").textContent="—";
+  document.getElementById("quality-chart-caption").textContent="not examined yet";
+  const chart=document.getElementById("quality-trend-chart");
+  if(chart) chart.innerHTML='<div class="theme-empty">Re-examine the current pairs to run a fresh check.</div>';
+  const offer=document.getElementById("global-offer-themes");
+  const want=document.getElementById("global-want-themes");
+  if(offer) offer.innerHTML='<div class="theme-empty">No assessment yet.</div>';
+  if(want) want.innerHTML='<div class="theme-empty">No assessment yet.</div>';
 }
 
 function renderGlobalThemes(id,themes){renderPairThemeList(id,themes);}
 async function refreshQualityDashboard(){
+  const button=document.getElementById("quality-refresh-btn");
   try {
     const scope=document.getElementById("quality-scope-select")?.value||"all";
-    const owner=scope==='active' && isVerifiedUser() ? `?owner=${encodeURIComponent(activeUser.owner)}` : '';
-    await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"analyze_quality", ...(scope==='active' && isVerifiedUser() ? { owner: activeUser.owner } : {}) }) });
-    const data=await api(`/creator-missions${owner}`); const q=data.quality||{};
-    document.getElementById("global-quality-pairs").textContent=Number(q.unique_pairs||0).toLocaleString();
+    const activeOwner=scope==='active' && isVerifiedUser() ? activeUser.owner : null;
+    setBusy(button,true,"Re-examining…");
+    const data=await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"analyze_quality", ...(activeOwner ? { owner: activeOwner } : {}) }) });
+    const q=data.quality||{};
+    document.getElementById("global-quality-pairs").textContent=Number(q.current_pairs ?? q.unique_pairs ?? 0).toLocaleString();
     document.getElementById("global-quality-duplicate").textContent=`${Number(q.duplicate_rate||0)}%`;
     document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} repeated current pair${Number(q.duplicates||0)===1?'':'s'}`;
     document.getElementById("global-quality-length").textContent=`${Number(q.average_pair_words||0)} words`;
     document.getElementById("quality-chart-caption").textContent=scope==='all'?'current bank':`${activeUser?.name||'active user'} current bank`;
     renderQualityTrend(q); renderGlobalThemes("global-offer-themes",q.offer_themes); renderGlobalThemes("global-want-themes",q.want_themes);
   } catch(error){showToast(error.message,"error");}
+  finally { setBusy(button,false); }
 }
 document.getElementById("quality-scope-select").addEventListener("change",refreshQualityDashboard);
 document.getElementById("quality-refresh-btn").addEventListener("click",refreshQualityDashboard);
+document.getElementById("quality-clear-btn")?.addEventListener("click",clearQualityAssessment);
 
 // ---------- CREATION MISSION ----------
 const CREATE_MISSION_KEY = "mira_creation_mission_v1";

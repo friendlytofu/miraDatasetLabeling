@@ -302,8 +302,8 @@
   <!-- PAIR QUALITY DASHBOARD -->
   <section class="quality-dashboard" id="quality-dashboard" aria-label="Pair quality insights">
     <div class="quality-dashboard-head">
-      <div><span class="section-kicker">DATA QUALITY</span><h2>Pair quality, right now.</h2><p>Re-examine only the offer + want pairs currently in the bank. Label history, save attempts, and old snapshots are excluded.</p></div>
-      <div class="quality-dashboard-actions"><label class="quality-scope-picker"><span>Scope</span><select id="quality-scope-select"><option value="all">All users</option><option value="active">Active user</option></select></label><button id="quality-refresh-btn" class="btn btn-secondary" type="button">Refresh analysis</button></div>
+      <div><span class="section-kicker">DATA QUALITY</span><h2>Pair quality, right now.</h2><p>Re-examine only the offer + want pairs currently in the bank. Label history, save attempts, and old snapshots never affect this check.</p></div>
+      <div class="quality-dashboard-actions"><label class="quality-scope-picker"><span>Scope</span><select id="quality-scope-select"><option value="all">All users</option><option value="active">Active user</option></select></label><button id="quality-refresh-btn" class="btn btn-secondary" type="button">Re-examine current pairs</button><button id="quality-clear-btn" class="btn-text" type="button">Clear assessment</button></div>
     </div>
     <div class="quality-dashboard-stats">
       <div class="quality-big-stat"><span>Current pairs</span><strong id="global-quality-pairs">0</strong><small>offer + want pairs in the bank</small></div>
@@ -311,7 +311,7 @@
       <div class="quality-big-stat"><span>Average pair length</span><strong id="global-quality-length">0 words</strong><small>offer + want together</small></div>
     </div>
     <div class="quality-dashboard-grid">
-      <div class="quality-chart-card"><div class="quality-chart-head"><div><span class="mission-subhead">CURRENT CHECK</span><h3>What is in the bank now</h3></div><span id="quality-chart-caption" class="quality-chart-caption">live assessment</span></div><div id="quality-trend-chart" class="quality-current-check"><div class="theme-empty">Re-examine the current pairs to see the latest assessment.</div></div></div>
+      <div class="quality-chart-card"><div class="quality-chart-head"><div><span class="mission-subhead">CURRENT CHECK</span><h3>What is in the bank now</h3></div><span id="quality-chart-caption" class="quality-chart-caption">not examined yet</span></div><div id="quality-trend-chart" class="quality-current-check"><div class="theme-empty">Re-examine the current pairs to see the latest assessment.</div></div></div>
       <div class="quality-theme-card"><div class="quality-chart-head"><div><span class="mission-subhead">TOP THEMES</span><h3>What the dataset talks about</h3></div></div><div class="quality-theme-columns"><div><div class="theme-title"><span>OFFERS</span><small>what people can give</small></div><div id="global-offer-themes" class="theme-list"><div class="theme-empty">No pairs yet.</div></div></div><div><div class="theme-title"><span>WANTS</span><small>what people need</small></div><div id="global-want-themes" class="theme-list"><div class="theme-empty">No pairs yet.</div></div></div></div></div>
     </div>
   </section>

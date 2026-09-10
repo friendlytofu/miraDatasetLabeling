@@ -636,3 +636,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .export-editor-textarea { min-height:300px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
 .file-btn { cursor:pointer; display:inline-flex; align-items:center; }
 @media (max-width: 760px) { .entry-edit-grid { grid-template-columns:1fr; } .label-task-controls { margin-left:0; } .editor-heading { flex-direction:column; } }
+
+/* Current-only quality controls */
+.quality-dashboard-actions { flex-wrap:wrap; }
+.quality-dashboard-actions .btn-text { white-space:nowrap; }
+@media (max-width:720px) { .quality-dashboard-actions .btn-text { margin-left:auto; } }
