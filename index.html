@@ -427,7 +427,22 @@
     </div>
 
     <div class="history-panel card">
-      <div class="history-heading"><div><span class="section-kicker">LABEL HISTORY</span><h3>Recent review activity</h3><p class="hint compact">See what changed, when it changed, and who made the decision.</p></div><button id="refresh-history-btn" class="btn-text" type="button">refresh</button></div>
+      <div class="history-heading">
+        <div><span class="section-kicker">LABEL HISTORY</span><h3>Review activity</h3><p class="hint compact">Select any label history you want to work with. Export selected labels or remove history records in bulk without changing the underlying activities.</p></div>
+        <button id="refresh-history-btn" class="btn-text" type="button">refresh</button>
+      </div>
+      <div class="history-toolbar">
+        <label class="history-check-all"><input id="history-select-all" type="checkbox" /> <span>Select all loaded</span></label>
+        <select id="history-filter-action" class="history-filter" aria-label="Filter history action">
+          <option value="all">All actions</option><option value="labeled">Labeled</option><option value="changed">Changed</option><option value="reset">Reset</option><option value="deleted">Deleted</option>
+        </select>
+        <select id="history-filter-label" class="history-filter" aria-label="Filter label">
+          <option value="all">All labels</option><option value="yes">Match</option><option value="no">No match</option>
+        </select>
+        <button id="history-export-selected-btn" class="btn btn-secondary" type="button">Export selected</button>
+        <button id="history-delete-selected-btn" class="btn-text danger-text" type="button">Delete selected history</button>
+      </div>
+      <div id="history-selection-status" class="history-selection-status" aria-live="polite">0 selected</div>
       <div id="label-history-list" class="label-history-list"><div class="history-empty">Loading history…</div></div>
     </div>
   </section>

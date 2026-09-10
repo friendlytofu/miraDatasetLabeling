@@ -826,19 +826,120 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowRight" && labelIndex < labelEntries.length - 1) document.getElementById("label-forward-btn").click();
 });
 
+let labelHistory = [];
+let selectedHistoryIds = new Set();
+
+function updateHistorySelectionStatus() {
+  const status = document.getElementById("history-selection-status");
+  if (!status) return;
+  status.textContent = `${selectedHistoryIds.size} selected`;
+}
+
+function filteredLabelHistory() {
+  const action = document.getElementById("history-filter-action")?.value || "all";
+  const label = document.getElementById("history-filter-label")?.value || "all";
+  return labelHistory.filter((h) => {
+    if (action !== "all" && h.action !== action) return false;
+    if (label !== "all" && h.new_label !== label) return false;
+    return true;
+  });
+}
+
+function renderLabelHistory() {
+  const el = document.getElementById("label-history-list");
+  if (!el) return;
+  const history = filteredLabelHistory();
+  if (!history.length) {
+    el.innerHTML = `<div class="history-empty">No history matches these filters.</div>`;
+    updateHistorySelectionStatus();
+    return;
+  }
+  el.innerHTML = history.map((h) => {
+    const selected = selectedHistoryIds.has(Number(h.id));
+    const icon = h.action === "labeled" ? "✓" : h.action === "changed" ? "↻" : h.action === "reset" ? "↺" : "×";
+    const labelText = h.new_label ? (h.new_label === "yes" ? "Match" : "No match") : h.action;
+    return `<label class="history-row ${selected ? "is-selected" : ""}">
+      <input class="history-row-check" type="checkbox" data-history-id="${Number(h.id)}" ${selected ? "checked" : ""} aria-label="Select history entry ${Number(h.id)}" />
+      <div class="history-icon">${icon}</div>
+      <div class="history-main"><strong>Entry #${h.entry_id}</strong><span>${escapeHtml(h.details || h.action)}</span></div>
+      <div class="history-meta"><strong>${labelText}</strong><span>${escapeHtml(h.labeler || "Unknown")} · ${new Date(h.acted_at).toLocaleString()}</span></div>
+    </label>`;
+  }).join("");
+  el.querySelectorAll(".history-row-check").forEach((input) => input.addEventListener("change", () => {
+    const id = Number(input.dataset.historyId);
+    if (input.checked) selectedHistoryIds.add(id); else selectedHistoryIds.delete(id);
+    input.closest(".history-row")?.classList.toggle("is-selected", input.checked);
+    updateHistorySelectionStatus();
+    syncHistorySelectAll();
+  }));
+  updateHistorySelectionStatus();
+  syncHistorySelectAll();
+}
+
+function syncHistorySelectAll() {
+  const box = document.getElementById("history-select-all");
+  if (!box) return;
+  const visible = filteredLabelHistory();
+  const visibleSelected = visible.filter((h) => selectedHistoryIds.has(Number(h.id))).length;
+  box.checked = visible.length > 0 && visibleSelected === visible.length;
+  box.indeterminate = visibleSelected > 0 && visibleSelected < visible.length;
+}
+
 async function loadLabelHistory() {
   try {
-    const { history } = await api("/history");
-    const el = document.getElementById("label-history-list");
-    if (!history?.length) { el.innerHTML = `<div class="history-empty">No labeling actions yet.</div>`; return; }
-    el.innerHTML = history.map((h) => `<div class="history-row">
-      <div class="history-icon">${h.action === "labeled" ? "✓" : h.action === "changed" ? "↻" : h.action === "reset" ? "↺" : "×"}</div>
-      <div class="history-main"><strong>Entry #${h.entry_id}</strong><span>${escapeHtml(h.details || h.action)}</span></div>
-      <div class="history-meta"><strong>${h.new_label ? (h.new_label === "yes" ? "Match" : "No match") : h.action}</strong><span>${escapeHtml(h.labeler || "Unknown")} · ${new Date(h.acted_at).toLocaleString()}</span></div>
-    </div>`).join("");
+    const { history } = await api("/history?limit=1000");
+    labelHistory = history || [];
+    const valid = new Set(labelHistory.map((h) => Number(h.id)));
+    selectedHistoryIds = new Set([...selectedHistoryIds].filter((id) => valid.has(id)));
+    renderLabelHistory();
   } catch (error) { showToast(error.message, "error"); }
 }
+
 document.getElementById("refresh-history-btn")?.addEventListener("click", loadLabelHistory);
+document.getElementById("history-filter-action")?.addEventListener("change", renderLabelHistory);
+document.getElementById("history-filter-label")?.addEventListener("change", renderLabelHistory);
+document.getElementById("history-select-all")?.addEventListener("change", (event) => {
+  const visible = filteredLabelHistory();
+  visible.forEach((h) => {
+    const id = Number(h.id);
+    if (event.target.checked) selectedHistoryIds.add(id); else selectedHistoryIds.delete(id);
+  });
+  renderLabelHistory();
+});
+
+document.getElementById("history-export-selected-btn")?.addEventListener("click", async (event) => {
+  const ids = [...selectedHistoryIds];
+  if (!ids.length) { showToast("Select at least one history record to export.", "error"); return; }
+  const button = event.currentTarget;
+  setBusy(button, true, "Preparing…");
+  try {
+    const res = await fetch(`/api/export?history_ids=${encodeURIComponent(ids.join(","))}`, { credentials: "same-origin", cache: "no-store" });
+    if (res.status === 401) { window.location.replace("/login.html"); return; }
+    if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Export failed (${res.status})`); }
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match?.[1] || `mira_selected_${new Date().toISOString().slice(0,10)}.jsonl`;
+    const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    showToast(`Exported ${filename}.`, "success");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(button, false); }
+});
+
+document.getElementById("history-delete-selected-btn")?.addEventListener("click", async (event) => {
+  const ids = [...selectedHistoryIds];
+  if (!ids.length) { showToast("Select history records to delete.", "error"); return; }
+  if (!confirm(`Delete ${ids.length} selected history record${ids.length === 1 ? "" : "s"}? This removes history only; activities and their current labels stay intact.`)) return;
+  const button = event.currentTarget;
+  setBusy(button, true, "Deleting…");
+  try {
+    await api("/history", { method: "DELETE", body: JSON.stringify({ ids }) });
+    selectedHistoryIds.clear();
+    await loadLabelHistory();
+    showToast(`Deleted ${ids.length} history record${ids.length === 1 ? "" : "s"}.`, "success");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(button, false); }
+});
 
 // ---------- EXPORT ----------
 async function loadExportStats() {
@@ -851,19 +952,22 @@ async function loadExportStats() {
   } catch (error) { showToast(error.message, "error"); }
 }
 
-document.getElementById("export-btn").addEventListener("click", async (event) => {
-  const button = event.currentTarget; const status = document.getElementById("export-status"); setBusy(button, true, "Preparing…"); setStatus(status, "Preparing JSON export…");
+async function downloadExport(urlPath, button, status) {
+  setBusy(button, true, "Preparing…");
+  setStatus(status, "Preparing JSON export…");
   try {
-    const res = await fetch("/api/export", { credentials: "same-origin", cache: "no-store" });
+    const res = await fetch(urlPath, { credentials: "same-origin", cache: "no-store" });
     if (res.status === 401) { window.location.replace("/login.html"); return; }
     if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || `Export failed (${res.status})`); }
     const blob = await res.blob(); const disposition = res.headers.get("content-disposition") || "";
-    const match = disposition.match(/filename="([^"]+)"/); const filename = match?.[1] || `mira_dataset_${new Date().toISOString().slice(0,10)}.json`;
-    const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    const match = disposition.match(/filename="([^"]+)"/); const filename = match?.[1] || `mira_dataset_${new Date().toISOString().slice(0,10)}.jsonl`;
+    const blobUrl = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = blobUrl; link.download = filename; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(blobUrl);
     setStatus(status, `Downloaded ${filename}.`, "success"); showToast("Dataset export downloaded.", "success");
   } catch (error) { setStatus(status, error.message, "error"); showToast(error.message, "error"); }
   finally { setBusy(button, false); }
-});
+}
+
+document.getElementById("export-btn").addEventListener("click", (event) => downloadExport("/api/export", event.currentTarget, document.getElementById("export-status")));
 
 // ---------- gentle interactivity ----------
 document.querySelectorAll(".btn, .suggestion-chip, .preset-btn, .icon-btn").forEach((button) => {
