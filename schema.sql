@@ -34,3 +34,16 @@ CREATE TABLE IF NOT EXISTS translations (
   translated_text TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+
+CREATE TABLE IF NOT EXISTS label_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entry_id INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  previous_label TEXT,
+  new_label TEXT,
+  labeler TEXT,
+  acted_at TEXT NOT NULL,
+  details TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_label_history_entry ON label_history(entry_id, acted_at DESC);

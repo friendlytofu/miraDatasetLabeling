@@ -332,7 +332,8 @@
           <path d="M23 23 L41 41 M41 23 L23 41" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
         </svg>
       </div>
-      <div class="entry-headline"><span class="live-dot"></span> Live review <span id="entry-index-label">Next</span></div>
+      <div class="entry-headline"><span class="live-dot"></span> Live review <span id="entry-index-label">Next</span><span id="entry-state-label" class="entry-state">Unlabeled</span></div>
+      <div id="entry-detail-label" class="entry-detail">Not labeled yet</div>
       <div class="entry-columns">
         <div>
           <h3 class="chip chip-offer">Offers</h3>
@@ -344,9 +345,20 @@
         </div>
       </div>
       <div class="label-actions">
+        <button id="label-back-btn" class="btn btn-secondary" type="button">← Back <span class="key-hint">←</span></button>
         <button id="label-no" class="btn btn-no" type="button">No match <span class="key-hint">N</span></button>
         <button id="label-yes" class="btn btn-yes" type="button">Match <span class="key-hint">Y</span></button>
+        <button id="label-forward-btn" class="btn btn-secondary" type="button">Forward → <span class="key-hint">→</span></button>
       </div>
+      <div class="label-management">
+        <button id="label-reset-btn" class="btn-text" type="button">Reset label</button>
+        <button id="label-delete-btn" class="btn-text danger-text" type="button">Delete activity</button>
+      </div>
+    </div>
+
+    <div class="history-panel card">
+      <div class="history-heading"><div><span class="section-kicker">LABEL HISTORY</span><h3>Recent review activity</h3><p class="hint compact">See what changed, when it changed, and who made the decision.</p></div><button id="refresh-history-btn" class="btn-text" type="button">refresh</button></div>
+      <div id="label-history-list" class="label-history-list"><div class="history-empty">Loading history…</div></div>
     </div>
   </section>
 
@@ -356,7 +368,7 @@
       <div>
         <span class="section-kicker">04 · SHIP THE DATA</span>
         <h2>Export the labeled dataset when the batch is ready.</h2>
-        <p>Download the exact JSON structure used by the training pipeline, with labels ordered by their saved timestamps.</p>
+        <p>Download one JSON object per line used by the training pipeline, with labels ordered by their saved timestamps.</p>
       </div>
       <div class="section-badge">JSON · sequential IDs</div>
     </div>
@@ -366,20 +378,13 @@
         <h3>Dataset snapshot</h3>
         <div id="export-stats" class="export-stats"></div>
         <div class="export-callout"><span>✓</span><div><strong>Blind labeling preserved</strong><p>Exports retain the stored decision and labeler metadata without exposing a suggested answer during review.</p></div></div>
-        <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Download JSON</span><span class="btn-arrow">↓</span></button>
+        <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Download JSONL</span><span class="btn-arrow">↓</span></button>
         <p id="export-status" class="status-line" aria-live="polite"></p>
       </div>
       <div class="card preview-card">
         <div class="card-topline"><span class="step-number">06</span><span>Format preview</span></div>
-        <div class="preview-window"><div class="window-dots"><i></i><i></i><i></i><span>dataset.json</span></div><pre id="export-preview" class="preview-block">{
-  "id": 0,
-  "offers": ["…"],
-  "wants": ["…"],
-  "human_label": "yes",
-  "labeler": "…",
-  "labeled_blind": true,
-  "labeled_at": "2026-08-19T18:44:13.269-07:00"
-}</pre></div>
+        <div class="preview-window"><div class="window-dots"><i></i><i></i><i></i><span>dataset.json</span></div><pre id="export-preview" class="preview-block">{"id":0,"offers":["…"],"wants":["…"],"human_label":"yes","labeler":"…","labeled_blind":true,"labeled_at":"2026-08-19T18:44:13.269-07:00"}
+{"id":1,"offers":["…"],"wants":["…"],"human_label":"no","labeler":"…","labeled_blind":true,"labeled_at":"2026-08-19T18:45:24.608-07:00"}</pre></div>
       </div>
     </div>
   </section>

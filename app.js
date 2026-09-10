@@ -362,81 +362,157 @@ const labelerInput = document.getElementById("labeler-name");
 labelerInput.value = localStorage.getItem("mira_labeler_name") || "";
 labelerInput.addEventListener("input", () => localStorage.setItem("mira_labeler_name", labelerInput.value));
 let currentEntry = null;
+let labelEntries = [];
+let labelIndex = -1;
 let labelingBusy = false;
 
-async function loadNextEntry() {
-  try {
-    const { entries, counts } = await api("/entries?status=unlabeled&limit=1");
-    const total = Number(counts.total || 0); const unlabeled = Number(counts.unlabeled || 0); const done = total - unlabeled;
-    document.getElementById("label-progress").textContent = `${unlabeled} unlabeled · ${total} total`;
-    document.getElementById("progress-fill").style.width = total ? `${(done / total) * 100}%` : "0%";
-    document.getElementById("metric-unlabeled").textContent = unlabeled;
-    if (!entries.length) {
-      currentEntry = null; document.getElementById("label-card").hidden = true; document.getElementById("label-empty").hidden = false; return;
-    }
-    document.getElementById("label-empty").hidden = true;
-    const card = document.getElementById("label-card"); card.hidden = false; card.classList.add("is-loading"); currentEntry = entries[0];
-    document.getElementById("entry-index-label").textContent = `Entry #${currentEntry.id}`;
-    await renderEntry(currentEntry);
-    requestAnimationFrame(() => card.classList.remove("is-loading"));
-  } catch (error) { showToast(error.message, "error"); }
-}
 function tokenize(text) {
-  const stop = new Set(["i","a","an","the","to","for","with","and","of","on","in","my","me","want","need","can","help","someone","who","looking"]);
+  const stop = new Set(["i","a","an","the","to","for","with","and","of","on","in","my","me","want","need","can","help","someone","who","looking","someone"]);
   return [...new Set(text.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((w) => w.length > 2 && !stop.has(w)))];
 }
-function highlightSharedTerms(texts) {
-  const tokensByItem = texts.map(tokenize); const tokenItems = {};
-  tokensByItem.forEach((toks, idx) => toks.forEach((t) => (tokenItems[t] = tokenItems[t] || new Set()).add(idx)));
-  const sharedTokens = Object.keys(tokenItems).filter((t) => tokenItems[t].size > 1); const colorFor = {};
-  sharedTokens.forEach((t, i) => (colorFor[t] = HIGHLIGHT_COLORS[i % HIGHLIGHT_COLORS.length]));
+function crossCategorySharedTokens(entry) {
+  const offerTokens = new Set(entry.offers.flatMap(tokenize));
+  const wantTokens = new Set(entry.wants.flatMap(tokenize));
+  return [...offerTokens].filter((token) => wantTokens.has(token));
+}
+function highlightCrossCategory(texts, sharedTokens) {
+  const colorFor = Object.fromEntries(sharedTokens.map((t, i) => [t, HIGHLIGHT_COLORS[i % HIGHLIGHT_COLORS.length]]));
   return texts.map((text) => {
-    const escaped = text.replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    const escaped = escapeHtml(text);
     if (!sharedTokens.length) return escaped;
-    const pattern = new RegExp(`\\b(${sharedTokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`, "gi");
+    const pattern = new RegExp(`\\b(${sharedTokens.map((t) => t.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")).join("|")})\\b`, "gi");
     return escaped.replace(pattern, (m) => `<mark style="background:${colorFor[m.toLowerCase()]}">${m}</mark>`);
   });
 }
+
+async function fetchLabelEntries() {
+  const { entries, counts } = await api("/entries?status=all&limit=500");
+  labelEntries = entries;
+  document.getElementById("label-progress").textContent = `${Number(counts.unlabeled || 0)} unlabeled · ${Number(counts.total || 0)} total`;
+  const done = Number(counts.total || 0) - Number(counts.unlabeled || 0);
+  document.getElementById("progress-fill").style.width = counts.total ? `${(done / counts.total) * 100}%` : "0%";
+  document.getElementById("metric-unlabeled").textContent = Number(counts.unlabeled || 0);
+  return labelEntries;
+}
+
+function updateLabelNavigation() {
+  document.getElementById("label-back-btn").disabled = labelIndex <= 0;
+  document.getElementById("label-forward-btn").disabled = labelIndex < 0 || labelIndex >= labelEntries.length - 1;
+  document.getElementById("label-reset-btn").disabled = !currentEntry;
+  document.getElementById("label-delete-btn").disabled = !currentEntry;
+  const state = currentEntry?.status === "labeled" ? `Labeled: ${currentEntry.human_label === "yes" ? "Match" : "No match"}` : "Unlabeled";
+  document.getElementById("entry-state-label").textContent = state;
+}
+
+async function showLabelEntry(entry, index = labelEntries.findIndex((e) => e.id === entry?.id)) {
+  if (!entry) return;
+  currentEntry = entry;
+  labelIndex = index;
+  document.getElementById("label-empty").hidden = true;
+  const card = document.getElementById("label-card"); card.hidden = false; card.classList.add("is-loading");
+  document.getElementById("entry-index-label").textContent = `Entry #${entry.id} · ${labelIndex + 1}/${labelEntries.length}`;
+  document.getElementById("entry-detail-label").textContent = entry.labeled_at ? `Last labeled ${new Date(entry.labeled_at).toLocaleString()} · ${entry.labeler || "unknown"}` : "Not labeled yet";
+  await renderEntry(entry);
+  updateLabelNavigation();
+  requestAnimationFrame(() => card.classList.remove("is-loading"));
+}
+
+async function loadNextEntry() {
+  try {
+    await fetchLabelEntries();
+    const firstUnlabeled = labelEntries.findIndex((entry) => entry.status === "unlabeled");
+    if (firstUnlabeled < 0) {
+      currentEntry = labelEntries[labelEntries.length - 1] || null;
+      if (currentEntry) await showLabelEntry(currentEntry, labelEntries.length - 1);
+      else { document.getElementById("label-card").hidden = true; document.getElementById("label-empty").hidden = false; }
+      return;
+    }
+    await showLabelEntry(labelEntries[firstUnlabeled], firstUnlabeled);
+  } catch (error) { showToast(error.message, "error"); }
+}
+
 async function renderEntry(entry) {
-  const offerHtml = highlightSharedTerms(entry.offers); const wantHtml = highlightSharedTerms(entry.wants);
+  const sharedTokens = crossCategorySharedTokens(entry);
+  const offerHtml = highlightCrossCategory(entry.offers, sharedTokens);
+  const wantHtml = highlightCrossCategory(entry.wants, sharedTokens);
   const translate = document.getElementById("translate-toggle").checked;
   let translations = {};
   if (translate) {
     const texts = [...new Set([...entry.offers, ...entry.wants])];
-    const res = await api("/translate", { method: "POST", body: JSON.stringify({ texts }) }); translations = res.translations || {};
+    const res = await api("/translate", { method: "POST", body: JSON.stringify({ texts }) });
+    translations = res.translations || {};
   }
-  document.getElementById("entry-offers").innerHTML = entry.offers.map((text, i) => `<div class="entry-item"><div class="en">${offerHtml[i]}</div>${translate && translations[text] ? `<div class="zh">${escapeHtml(translations[text])}</div>` : ""}</div>`).join("");
-  document.getElementById("entry-wants").innerHTML = entry.wants.map((text, i) => `<div class="entry-item"><div class="en">${wantHtml[i]}</div>${translate && translations[text] ? `<div class="zh">${escapeHtml(translations[text])}</div>` : ""}</div>`).join("");
+  const zh = (text) => translate && translations[text] ? `<div class="zh" lang="zh-CN">${escapeHtml(translations[text])}</div>` : "";
+  document.getElementById("entry-offers").innerHTML = entry.offers.map((text, i) => `<div class="entry-item"><div class="en">${offerHtml[i]}</div>${zh(text)}</div>`).join("");
+  document.getElementById("entry-wants").innerHTML = entry.wants.map((text, i) => `<div class="entry-item"><div class="en">${wantHtml[i]}</div>${zh(text)}</div>`).join("");
 }
 function escapeHtml(text) { return String(text).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 document.getElementById("translate-toggle").addEventListener("change", () => currentEntry && renderEntry(currentEntry).catch((error) => showToast(error.message, "error")));
 
+document.getElementById("label-back-btn").addEventListener("click", async () => { if (labelIndex > 0) await showLabelEntry(labelEntries[labelIndex - 1], labelIndex - 1); });
+document.getElementById("label-forward-btn").addEventListener("click", async () => { if (labelIndex < labelEntries.length - 1) await showLabelEntry(labelEntries[labelIndex + 1], labelIndex + 1); });
+
+document.getElementById("label-reset-btn").addEventListener("click", async () => {
+  if (!currentEntry || !confirm(`Reset Entry #${currentEntry.id} and return it to the unlabeled queue?`)) return;
+  const labeler = labelerInput.value.trim();
+  if (!labeler) { labelerInput.focus(); showToast("Enter your labeler name first.", "error"); return; }
+  try {
+    await api("/label", { method: "PUT", body: JSON.stringify({ id: currentEntry.id, labeler, acted_at: formatLocalISO(new Date()) }) });
+    showToast(`Entry #${currentEntry.id} reset.`, "success");
+    await loadNextEntry(); await loadLabelHistory();
+  } catch (error) { showToast(error.message, "error"); }
+});
+
+document.getElementById("label-delete-btn").addEventListener("click", async () => {
+  if (!currentEntry || !confirm(`Permanently delete Entry #${currentEntry.id}? This cannot be undone.`)) return;
+  const labeler = labelerInput.value.trim();
+  if (!labeler) { labelerInput.focus(); showToast("Enter your labeler name first.", "error"); return; }
+  try {
+    await api(`/label?id=${encodeURIComponent(currentEntry.id)}&labeler=${encodeURIComponent(labeler)}`, { method: "DELETE" });
+    showToast(`Entry #${currentEntry.id} deleted.`, "success");
+    await loadNextEntry(); await loadLabelHistory();
+  } catch (error) { showToast(error.message, "error"); }
+});
+
 async function labelCurrent(humanLabel) {
   if (!currentEntry || labelingBusy) return;
   const labeler = labelerInput.value.trim();
-  if (!labeler) { setStatus(document.getElementById("label-progress"), "", ""); labelerInput.focus(); showToast("Enter your labeler name first.", "error"); return; }
+  if (!labeler) { labelerInput.focus(); showToast("Enter your labeler name first.", "error"); return; }
   labelingBusy = true;
   const yes = humanLabel === "yes"; const feedback = document.getElementById("label-feedback");
-  document.getElementById("feedback-yes-icon").hidden = !yes; document.getElementById("feedback-no-icon").hidden = yes;
-  feedback.classList.add("is-active");
+  document.getElementById("feedback-yes-icon").hidden = !yes; document.getElementById("feedback-no-icon").hidden = yes; feedback.classList.add("is-active");
   try {
     await api("/label", { method: "POST", body: JSON.stringify({ id: currentEntry.id, human_label: humanLabel, labeler, labeled_at: formatLocalISO(new Date()) }) });
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    feedback.classList.remove("is-active");
-    await loadNextEntry();
-  } catch (error) {
-    feedback.classList.remove("is-active"); showToast(error.message, "error");
-  } finally { labelingBusy = false; }
+    await new Promise((resolve) => setTimeout(resolve, 150)); feedback.classList.remove("is-active");
+    showToast(currentEntry.status === "labeled" ? `Entry #${currentEntry.id} updated.` : `Entry #${currentEntry.id} labeled.`, "success");
+    await loadNextEntry(); await loadLabelHistory();
+  } catch (error) { feedback.classList.remove("is-active"); showToast(error.message, "error"); }
+  finally { labelingBusy = false; }
 }
 document.getElementById("label-no").addEventListener("click", () => labelCurrent("no"));
 document.getElementById("label-yes").addEventListener("click", () => labelCurrent("yes"));
 document.addEventListener("keydown", (event) => {
   if (!document.getElementById("panel-label").classList.contains("is-active") || labelingBusy) return;
-  const tag = document.activeElement?.tagName;
-  if (["INPUT","TEXTAREA","BUTTON","SELECT"].includes(tag)) return;
-  if (event.key.toLowerCase() === "y" || event.key === "ArrowRight") labelCurrent("yes");
-  if (event.key.toLowerCase() === "n" || event.key === "ArrowLeft") labelCurrent("no");
+  const tag = document.activeElement?.tagName; if (["INPUT","TEXTAREA","BUTTON","SELECT"].includes(tag)) return;
+  if (event.key.toLowerCase() === "y") labelCurrent("yes");
+  if (event.key.toLowerCase() === "n") labelCurrent("no");
+  if (event.key === "ArrowLeft" && labelIndex > 0) document.getElementById("label-back-btn").click();
+  if (event.key === "ArrowRight" && labelIndex < labelEntries.length - 1) document.getElementById("label-forward-btn").click();
 });
+
+async function loadLabelHistory() {
+  try {
+    const { history } = await api("/history");
+    const el = document.getElementById("label-history-list");
+    if (!history?.length) { el.innerHTML = `<div class="history-empty">No labeling actions yet.</div>`; return; }
+    el.innerHTML = history.map((h) => `<div class="history-row">
+      <div class="history-icon">${h.action === "labeled" ? "✓" : h.action === "changed" ? "↻" : h.action === "reset" ? "↺" : "×"}</div>
+      <div class="history-main"><strong>Entry #${h.entry_id}</strong><span>${escapeHtml(h.details || h.action)}</span></div>
+      <div class="history-meta"><strong>${h.new_label ? (h.new_label === "yes" ? "Match" : "No match") : h.action}</strong><span>${escapeHtml(h.labeler || "Unknown")} · ${new Date(h.acted_at).toLocaleString()}</span></div>
+    </div>`).join("");
+  } catch (error) { showToast(error.message, "error"); }
+}
+document.getElementById("refresh-history-btn")?.addEventListener("click", loadLabelHistory);
 
 // ---------- EXPORT ----------
 async function loadExportStats() {
@@ -471,49 +547,91 @@ const helperGo = document.getElementById("helper-go-btn");
 let helperMode = "rephrase";
 
 const helperFieldSets = [
-  { test: /baseball|softball|pitch|bat|training|sports/i, ideas: ["I want to find a baseball training partner to practice with.", "I'm looking for someone to train with and improve my baseball skills.", "I'd love to connect with a player who wants to practice together."] },
-  { test: /math|algebra|calculus|science|chemistry|physics|biology/i, ideas: ["I'm looking for someone to study and work through problems with.", "I want help understanding the topic through practice and examples.", "I'd like to find a study partner who can explain the tricky parts clearly."] },
-  { test: /music|guitar|piano|sing|instrument|band/i, ideas: ["I'm looking for someone to practice music with and swap tips.", "I'd love to learn from someone who enjoys making music together.", "I want to find a practice partner with similar musical interests."] },
-  { test: /art|draw|paint|design|photo|photography|video/i, ideas: ["I'd like to collaborate with someone on creative projects and improve my skills.", "I'm looking for feedback and ideas from someone interested in visual creativity.", "I want to find a creative partner to practice and make projects with."] },
-  { test: /language|spanish|french|chinese|japanese|korean|english/i, ideas: ["I'm looking for a conversation partner to practice a language with.", "I'd like to trade language practice with someone at a similar level.", "I want to build confidence speaking through casual practice."] },
-  { test: /cook|bake|food|recipe|chef|cooking/i, ideas: ["I'd love to learn new cooking techniques from someone who enjoys sharing them.", "I'm looking for a cooking partner to try recipes and swap ideas.", "I want to practice cooking together and learn from each other."] },
-  { test: /travel|trip|hike|camp|outdoor/i, ideas: ["I'm looking for someone to plan an adventure and explore together.", "I'd love to find a travel buddy with similar interests and pace.", "I want to connect with someone who enjoys exploring new places."] },
+  { name:"sports", test:/baseball|softball|soccer|basketball|football|tennis|climbing|running|swim|skate|ski|golf|disc golf|longboard|cycling|sports/i,
+    want:["find a practice partner","join a beginner-friendly group","get feedback on technique","build a consistent practice routine","learn drills from someone experienced"],
+    offer:["practice with a beginner","share drills and technique tips","help someone build a routine","give friendly feedback","teach the basics"],
+    subjects:["training partners","practice sessions","skill-building","beginner coaching"] },
+  { name:"learning", test:/math|algebra|calculus|science|chemistry|physics|biology|history|economics|coding|programming|school|study|homework|research/i,
+    want:["find a study partner","work through examples together","get help with the tricky parts","practice with someone at a similar level","turn the topic into a small project"],
+    offer:["study together","explain the basics clearly","work through practice problems","share study strategies","help someone review a topic"],
+    subjects:["study partners","practice sessions","peer tutoring","small projects"] },
+  { name:"creative", test:/art|draw|paint|design|photo|photography|video|film|illustrat|craft|sew|knit|ceramic|music|guitar|piano|sing|instrument|band/i,
+    want:["find a creative collaborator","get feedback on a project","practice with someone who shares the interest","learn a technique from another maker","start a small collaborative project"],
+    offer:["share creative feedback","collaborate on a small project","teach a beginner technique","practice together","help someone develop an idea"],
+    subjects:["creative collaboration","project feedback","skill swaps","practice sessions"] },
+  { name:"language", test:/language|spanish|french|chinese|mandarin|japanese|korean|english|german|italian|conversation/i,
+    want:["find a conversation partner","practice casually with someone","build confidence speaking","trade language practice","learn useful everyday phrases"],
+    offer:["practice conversation","help with everyday vocabulary","trade language practice","give friendly pronunciation feedback","chat at a comfortable beginner pace"],
+    subjects:["conversation partners","language exchanges","pronunciation practice","everyday vocabulary"] },
+  { name:"food", test:/cook|bake|food|recipe|chef|cooking|bread|ferment|coffee|tea|latte/i,
+    want:["swap recipes and techniques","cook alongside someone","learn a beginner-friendly technique","get feedback on a recipe","try a small cooking project together"],
+    offer:["share recipes and techniques","cook alongside a beginner","teach a simple technique","swap meal ideas","help troubleshoot a recipe"],
+    subjects:["recipe swaps","cooking sessions","technique sharing","small food projects"] },
+  { name:"outdoors", test:/travel|trip|hike|camp|outdoor|garden|bonsai|bird|beehive|aquaponic|compost|nature|telescope/i,
+    want:["find someone to explore with","learn practical beginner tips","plan a small outdoor project","get advice from someone experienced","join a local-interest activity"],
+    offer:["share practical beginner tips","plan an activity together","teach the basics","help with setup and troubleshooting","share experience from a similar project"],
+    subjects:["activity partners","beginner guidance","project planning","local-interest groups"] },
 ];
 
 function normalizeHelperText(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
 function sentenceCase(value) { const t = normalizeHelperText(value); return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
-function helperBaseIdeas(text) {
-  const topic = normalizeHelperText(text).replace(/[.!?]+$/, "");
-  const match = helperFieldSets.find((item) => item.test.test(topic));
-  if (match) return match.ideas;
-  const p = topic || "a new skill";
+function detectHelperField(text) { return helperFieldSets.find((item) => item.test.test(text)); }
+function helperTopic(text) {
+  return normalizeHelperText(text).replace(/[.!?]+$/, "").replace(/^(i\s+(want|need|would like|am looking for|can|offer|teach)|i'm\s+looking for|looking for)\s+/i, "").trim() || "a new skill";
+}
+function genericField() {
+  return { name:"general", want:["find someone interested too","learn from someone with experience","practice with a partner","turn the idea into a small project","get feedback and practical tips"], offer:["share what I know","practice with someone who is learning","give beginner-friendly guidance","swap ideas and resources","help someone get started"], subjects:["practice partners","skill swaps","beginner sessions","collaborative projects"] };
+}
+function helperBaseIdeas(text, perspective="want") {
+  const topic = helperTopic(text); const field = detectHelperField(text) || genericField();
+  const pool = perspective === "offer" ? field.offer : field.want;
   return [
-    `I'm looking for someone to learn more about ${p} with.`,
-    `I'd love to connect with someone who is interested in ${p}.`,
-    `I want to explore ${p} with a person who can share ideas and practice together.`,
+    ...pool.slice(0,5).map((action) => perspective === "offer" ? `I can ${action} around ${topic}.` : `I want to ${action} around ${topic}.`),
+    ...field.subjects.slice(0,3).map((subject) => perspective === "offer" ? `I can offer a ${subject} focused on ${topic}.` : `I'd like to find ${subject} related to ${topic}.`),
   ];
 }
 function finishIdeas(text) {
-  const base = sentenceCase(text).replace(/[.!?]+$/, "");
+  const base = sentenceCase(normalizeHelperText(text)).replace(/[.!?]+$/, "");
   if (!base) return helperBaseIdeas("a new skill");
   const lower = base.toLowerCase();
-  const endings = lower.startsWith("i want")
-    ? [" so I can practice and improve.", " and meet someone who is interested too.", " with someone at a similar level."]
+  const endings = lower.startsWith("i want") || lower.startsWith("i'd like")
+    ? [" so I can practice and improve.", " with someone at a similar level.", " and make it practical for a real project.", " while keeping it relaxed and beginner-friendly.", " and meet someone who is interested too.", " with a clear first step I can try this week."]
     : lower.startsWith("i can") || lower.startsWith("i offer")
-      ? [" for someone who wants to learn and practice.", " and tailor it to a beginner-friendly level.", " while keeping it practical and easy to follow."]
-      : [" and turn it into something practical.", " with someone who can share ideas and feedback.", " in a relaxed, beginner-friendly way."];
+      ? [" for someone who wants to learn and practice.", " and tailor it to a beginner-friendly level.", " while keeping it practical and easy to follow.", " through a short hands-on session.", " and share a few resources to get started.", " with room for questions and feedback."]
+      : [" as a skill I can learn or share.", " with someone who can exchange ideas and feedback.", " through a small, practical project.", " in a relaxed, beginner-friendly way.", " with a clear first step and a simple goal.", " by finding someone interested in the same topic."];
   return endings.map((end) => `${base}${end}`);
 }
 function rephraseIdeas(text) {
-  const topic = normalizeHelperText(text).replace(/[.!?]+$/, "");
-  if (!topic) return helperBaseIdeas("a new skill");
-  const generic = helperBaseIdeas(topic);
-  const p = topic.replace(/^(i\s+(want|need|would like|am looking for|can|offer)\s+)/i, "").trim();
-  return [
-    `I'd like to ${/^(want|need)/i.test(topic) ? "find help with" : "explore"} ${p}.`,
-    `I'm looking for a chance to learn, practice, or share ${p}.`,
-    generic[2] || `I'd love to connect with someone interested in ${p}.`,
+  const topic = helperTopic(text); const field = detectHelperField(text);
+  const core = [
+    `I'd like to explore ${topic} with someone who is interested too.`,
+    `I'm looking for a chance to learn, practice, or share ${topic}.`,
+    `I want to turn ${topic} into a clear, specific activity I can pursue.`,
+    `I'd love to connect with someone who can exchange practical ideas about ${topic}.`,
+    `I'm interested in a beginner-friendly way to learn more about ${topic}.`,
   ];
+  if (field) core.push(`I'd like to find a ${field.subjects[0]} focused on ${topic}.`);
+  return core;
+}
+function brainstormIdeas(text) {
+  const topic = helperTopic(text); const field = detectHelperField(text) || genericField();
+  const wants = field.want.slice(0,5).map((x) => `Want: ${sentenceCase(x)} around ${topic}.`);
+  const offers = field.offer.slice(0,5).map((x) => `Offer: ${sentenceCase(x)} around ${topic}.`);
+  const collaborations = [
+    `Collaborate: build a small ${topic} project together.`,
+    `Exchange: trade tips, resources, or practice time around ${topic}.`,
+    `Meet: find a local or online group interested in ${topic}.`,
+    `Challenge: set a simple 7-day goal connected to ${topic}.`,
+    `Teach-back: learn ${topic} and explain one useful part to someone else.`,
+  ];
+  return [...wants, ...offers, ...collaborations];
+}
+function diversifyIdeas(ideas, limit=8) {
+  const seen = new Set();
+  return ideas.map(normalizeHelperText).filter((idea) => {
+    const key = idea.toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    if (!key || seen.has(key)) return false; seen.add(key); return true;
+  }).slice(0, limit);
 }
 function renderHelperIdeas(ideas) {
   helperResults.innerHTML = ideas.map((idea, index) => `
@@ -543,14 +661,11 @@ function renderHelperIdeas(ideas) {
 }
 function runHelper() {
   const text = normalizeHelperText(helperInput.value);
-  if (!text) {
-    helperStatus.textContent = "Give me a little spark";
-    helperInput.focus();
-    showToast("Type a topic or partly written phrase first.", "error");
-    return;
-  }
-  let ideas = helperMode === "finish" ? finishIdeas(text) : helperMode === "brainstorm" ? helperBaseIdeas(text).concat([`Try narrowing ${text} into a skill, goal, person to meet, or activity.`]) : rephraseIdeas(text);
-  ideas = [...new Set(ideas)].slice(0, 4);
+  if (!text) { helperStatus.textContent = "Give me a little spark"; helperInput.focus(); showToast("Type a topic or partly written phrase first.", "error"); return; }
+  helperStatus.textContent = "Exploring possibilities…";
+  const ideas = helperMode === "finish" ? diversifyIdeas(finishIdeas(text), 8)
+    : helperMode === "brainstorm" ? diversifyIdeas(brainstormIdeas(text), 10)
+    : diversifyIdeas(rephraseIdeas(text), 8);
   helperStatus.textContent = `${ideas.length} ideas ready`;
   renderHelperIdeas(ideas);
 }

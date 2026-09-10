@@ -136,3 +136,13 @@ wrangler pages dev . --d1=DB=mira-labeling-db
 The Mira Muse helper can import a simple activity/topic list directly in the browser. Supported formats are TXT, Markdown, CSV, and JSON; the importer detects activity/subject/topic/skill-like values, creates paired Want and Offer drafts, and lets you review, switch type, select, and edit the generated text before explicitly adding it to the existing item bank.
 
 Imports are non-destructive: merely uploading a file does not create database records.
+
+
+### Label management
+The Label tab now supports back/forward navigation, changing an existing label, resetting an entry to unlabeled, permanent deletion, and a timestamped label-history view. History is stored in the D1 `label_history` table.
+
+### Export format
+Dataset export is JSONL: exactly one compact JSON object per line, saved as `.jsonl`, with no pretty-printed multi-line records.
+
+### Chinese translation
+The translator now tries Google Translate's public endpoint first and MyMemory as a fallback, validates that a Chinese-script result was returned, and caches by source/target/text.
