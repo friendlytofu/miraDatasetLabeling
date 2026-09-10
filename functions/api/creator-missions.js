@@ -55,46 +55,85 @@ async function pairCount(env, owner) {
   return Number(row?.total || 0);
 }
 
-// Older versions stored authored offers/wants only in items. Reconstruct the
-// one-to-one pairs that can be proven from a shared source_phrase so the quality
-// dashboard analyzes the existing bank, not only pairs created after this feature.
-async function backfillLegacyPairs(env) {
+// Older versions stored authored offers/wants only in items. Reconcile that
+// legacy bank once: the item bank is the source of truth for the pairs that
+// already existed before per-user pair tracking was introduced. If a Tony user
+// exists, those legacy pairs are credited to Tony rather than the old "default"
+// owner. This prevents legacy backfill from inflating the dataset count.
+async function legacyPairSet(env) {
   const rows = (await env.DB.prepare(`
     SELECT id, text, type, source_phrase, created_at
     FROM items
     WHERE source_phrase IS NOT NULL AND TRIM(source_phrase) <> ''
     ORDER BY source_phrase, id
   `).all()).results || [];
-  if (!rows.length) return 0;
   const groups = new Map();
   for (const row of rows) {
-    const key = normalize(row.source_phrase);
-    if (!key) continue;
-    if (!groups.has(key)) groups.set(key, { offers: [], wants: [] });
-    groups.get(key)[row.type === 'offer' ? 'offers' : 'wants'].push(row);
+    const source = normalize(row.source_phrase);
+    if (!source) continue;
+    if (!groups.has(source)) groups.set(source, { offers: [], wants: [] });
+    if (row.type === 'offer') groups.get(source).offers.push(row);
+    if (row.type === 'want') groups.get(source).wants.push(row);
   }
-  let inserted = 0;
+  const pairs = [];
   for (const group of groups.values()) {
     const count = Math.min(group.offers.length, group.wants.length);
     for (let i = 0; i < count; i++) {
       const offer = String(group.offers[i].text || '').trim();
       const want = String(group.wants[i].text || '').trim();
-      if (!offer || !want) continue;
-      const key = pairKey(offer, want);
-      const result = await env.DB.prepare(
-        `INSERT OR IGNORE INTO creator_pairs(owner,pair_key,offer_text,want_text,created_at) VALUES ('default',?,?,?,?)`
-      ).bind(key, offer, want, group.offers[i].created_at || group.wants[i].created_at || new Date().toISOString()).run();
-      if (Number(result.meta?.changes || 0) > 0) {
-        inserted++;
-        await env.DB.prepare(
-          `INSERT INTO creator_pair_events(owner,pair_key,offer_text,want_text,is_duplicate,created_at) VALUES ('default',?,?,?,?,?)`
-        ).bind(key, offer, want, 0, group.offers[i].created_at || group.wants[i].created_at || new Date().toISOString()).run();
+      if (offer && want) pairs.push({ key: pairKey(offer, want), offer, want, created_at: group.offers[i].created_at || group.wants[i].created_at });
+    }
+  }
+  const seen = new Set();
+  return pairs.filter(p => !seen.has(p.key) && seen.add(p.key));
+}
+
+async function reconcileLegacyPairs(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS creator_legacy_reconciliation (
+    id INTEGER PRIMARY KEY CHECK (id=1), reconciled_at TEXT NOT NULL, pair_count INTEGER NOT NULL DEFAULT 0
+  )`).run();
+  const done = await env.DB.prepare("SELECT id FROM creator_legacy_reconciliation WHERE id=1").first();
+  if (done) return Number(done.pair_count || 0);
+
+  const pairs = await legacyPairSet(env);
+  const tony = await env.DB.prepare("SELECT id,name FROM users WHERE active=1 AND lower(name)=lower('tony') ORDER BY id LIMIT 1").first();
+  const tonyOwner = tony ? `user:${Number(tony.id)}` : null;
+
+  // The nine (or however many) pairs already represented by the item bank are
+  // authoritative. Credit them to Tony when that legacy contributor exists.
+  if (tonyOwner) {
+    for (const pair of pairs) {
+      await env.DB.prepare(`INSERT OR IGNORE INTO creator_pairs(owner,pair_key,offer_text,want_text,created_at) VALUES (?,?,?,?,?)`)
+        .bind(tonyOwner, pair.key, pair.offer, pair.want, pair.created_at || new Date().toISOString()).run();
+    }
+    // Move old default events to Tony so duplicate history remains attached to
+    // the original contributor without creating a second pair count.
+    await env.DB.prepare("UPDATE creator_pair_events SET owner=? WHERE owner='default' AND pair_key IN (SELECT pair_key FROM creator_pairs WHERE owner=? )")
+      .bind(tonyOwner, tonyOwner).run();
+  }
+
+  // Remove legacy/default rows that are now represented by the canonical item
+  // bank. Any current, explicitly-owned user pairs remain untouched.
+  if (pairs.length) {
+    const keys = pairs.map(p => p.key);
+    for (const key of keys) {
+      if (tonyOwner) {
+        await env.DB.prepare("DELETE FROM creator_pairs WHERE owner='default' AND pair_key=?").bind(key).run();
       }
     }
   }
-  return inserted;
+
+  await env.DB.prepare("INSERT INTO creator_legacy_reconciliation(id,reconciled_at,pair_count) VALUES (1,?,?)")
+    .bind(new Date().toISOString(), pairs.length).run();
+  return pairs.length;
 }
 
+async function backfillLegacyPairs(env) {
+  // Kept as a compatibility wrapper for older callers. Reconciliation is
+  // deliberately one-time so subsequent users' contributions are never
+  // reassigned to Tony.
+  return reconcileLegacyPairs(env);
+}
 const THEME_RULES = [
   ["Teaching & learning", /teach|tutor|lesson|study|learn|homework|class|math|science|history|school|academic|mentor|coach/],
   ["Sports & fitness", /baseball|basketball|soccer|football|tennis|running|fitness|workout|gym|yoga|climb|swim|sport|training/],
@@ -120,14 +159,24 @@ async function qualityStats(env, owner = null) {
   // corresponding creator_pairs row, include those event pairs as a legacy fallback.
   const pairRows = (await env.DB.prepare(`SELECT pair_key,offer_text,want_text FROM creator_pairs${where} ORDER BY id ASC`).bind(...bind).all()).results || [];
   const eventRows = (await env.DB.prepare(`SELECT pair_key,offer_text,want_text,created_at FROM creator_pair_events${where} ORDER BY id ASC`).bind(...bind).all()).results || [];
-  const seen = new Set(pairRows.map(p => String(p.pair_key)));
+  // The global dashboard represents the dataset, not ownership rows. The same
+  // pair can temporarily exist under more than one owner while legacy data is
+  // being reconciled, so collapse by normalized pair key for the all-user view.
+  const seen = new Set();
+  const uniquePairs = [];
+  for (const pair of pairRows) {
+    const key = String(pair.pair_key || pairKey(pair.offer_text, pair.want_text));
+    if (!seen.has(key)) { seen.add(key); uniquePairs.push({ ...pair, pair_key:key }); }
+  }
   for (const event of eventRows) {
-    const key = String(event.pair_key || `${normalize(event.offer_text)}\u001f${normalize(event.want_text)}`);
+    const key = String(event.pair_key || pairKey(event.offer_text, event.want_text));
     if (!seen.has(key)) {
       seen.add(key);
-      pairRows.push({ pair_key:key, offer_text:event.offer_text, want_text:event.want_text, created_at:event.created_at });
+      uniquePairs.push({ pair_key:key, offer_text:event.offer_text, want_text:event.want_text, created_at:event.created_at });
     }
   }
+  pairRows.length = 0;
+  pairRows.push(...uniquePairs);
 
   const attempts = Number(eventRow?.attempts || 0);
   const duplicates = Number(eventRow?.duplicates || 0);

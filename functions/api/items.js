@@ -74,13 +74,18 @@ export async function onRequestPost({ request, env }) {
       const dupRate = Number(events?.attempts || 0) ? Math.round(Number(events?.duplicates || 0) / Number(events.attempts) * 1000) / 10 : 0;
       await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES ('owner',?,?,?,?,?,?, '[]','[]')`)
         .bind(owner,snapNow,pairRows.length,Number(events?.attempts || 0),Number(events?.duplicates || 0),dupRate,avg).run();
-      const allPairs = await env.DB.prepare("SELECT offer_text,want_text FROM creator_pairs").all();
+      const allPairs = await env.DB.prepare("SELECT pair_key,offer_text,want_text FROM creator_pairs ORDER BY id ASC").all();
+      const uniqueAll = []; const seenAll = new Set();
+      for (const pair of (allPairs.results || [])) {
+        const key = String(pair.pair_key || `${normalize(pair.offer_text)}\u001f${normalize(pair.want_text)}`);
+        if (!seenAll.has(key)) { seenAll.add(key); uniqueAll.push(pair); }
+      }
       const allEvents = await env.DB.prepare("SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events").first();
-      const allWords = (allPairs.results || []).reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
-      const allAvg = allPairs.results?.length ? Math.round(allWords / allPairs.results.length * 10) / 10 : 0;
+      const allWords = uniqueAll.reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
+      const allAvg = uniqueAll.length ? Math.round(allWords / uniqueAll.length * 10) / 10 : 0;
       const allDupRate = Number(allEvents?.attempts || 0) ? Math.round(Number(allEvents?.duplicates || 0) / Number(allEvents.attempts) * 1000) / 10 : 0;
       await env.DB.prepare(`INSERT INTO creator_quality_snapshots(scope,owner,captured_at,total_pairs,attempts,duplicates,duplicate_rate,average_pair_words,offer_themes,want_themes) VALUES ('all',NULL,?,?,?,?,?,?, '[]','[]')`)
-        .bind(snapNow,allPairs.results?.length || 0,Number(allEvents?.attempts || 0),Number(allEvents?.duplicates || 0),allDupRate,allAvg).run();
+        .bind(snapNow,uniqueAll.length,Number(allEvents?.attempts || 0),Number(allEvents?.duplicates || 0),allDupRate,allAvg).run();
       creatorPairResult = { recorded, duplicate: !recorded, pairTotal: Number(countRow?.total || 0) };
     }
   }
