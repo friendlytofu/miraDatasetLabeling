@@ -28,8 +28,6 @@ CREATE TABLE IF NOT EXISTS entries (
 CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
 CREATE INDEX IF NOT EXISTS idx_entries_bucket ON entries(offer_count, want_count);
 
-DROP TABLE IF EXISTS translations;
-
 CREATE TABLE IF NOT EXISTS label_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_id INTEGER NOT NULL,
@@ -43,36 +41,58 @@ CREATE TABLE IF NOT EXISTS label_history (
 CREATE INDEX IF NOT EXISTS idx_label_history_entry ON label_history(entry_id, acted_at DESC);
 
 
-CREATE TABLE IF NOT EXISTS mission_state (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  goal INTEGER NOT NULL DEFAULT 100,
-  flag TEXT NOT NULL DEFAULT '🏁',
-  labeler TEXT,
-  baseline_labeled INTEGER NOT NULL DEFAULT 0,
-  started_at TEXT,
-  active INTEGER NOT NULL DEFAULT 0,
-  completed_at TEXT,
-  completed_total INTEGER
-);
-
 CREATE TABLE IF NOT EXISTS mission_presets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner TEXT NOT NULL DEFAULT 'default',
   name TEXT NOT NULL,
   goal INTEGER NOT NULL,
-  flag TEXT NOT NULL DEFAULT '🏁',
-  labeler TEXT,
+  flag TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS mission_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner TEXT NOT NULL DEFAULT 'default',
   goal INTEGER NOT NULL,
   flag TEXT NOT NULL,
-  labeler TEXT,
   started_at TEXT NOT NULL,
   completed_at TEXT NOT NULL,
-  baseline_labeled INTEGER NOT NULL DEFAULT 0,
-  completed_total INTEGER NOT NULL DEFAULT 0,
-  labels_completed INTEGER NOT NULL DEFAULT 0
+  starting_labeled INTEGER NOT NULL DEFAULT 0,
+  labeled_total INTEGER NOT NULL DEFAULT 0,
+  generated_total INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS idx_mission_history_completed ON mission_history(completed_at DESC);
+
+CREATE TABLE IF NOT EXISTS creator_pairs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner TEXT NOT NULL DEFAULT 'default',
+  pair_key TEXT NOT NULL,
+  offer_text TEXT NOT NULL,
+  want_text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(owner, pair_key)
+);
+CREATE INDEX IF NOT EXISTS idx_creator_pairs_owner_created ON creator_pairs(owner, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS creator_mission_presets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner TEXT NOT NULL DEFAULT 'default',
+  name TEXT NOT NULL,
+  goal INTEGER NOT NULL,
+  flag TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS creator_mission_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner TEXT NOT NULL DEFAULT 'default',
+  goal INTEGER NOT NULL,
+  flag TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  starting_pairs INTEGER NOT NULL DEFAULT 0,
+  pairs_total INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_creator_mission_history_owner_completed ON creator_mission_history(owner, completed_at DESC);

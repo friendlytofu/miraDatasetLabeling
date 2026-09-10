@@ -2,7 +2,7 @@
 
 A small internal tool for expanding the Mira offer/want matching training set:
 draft offer/want phrasings from plain-language activity descriptions, generate
-balanced non-repeating 1–3-offer × 1–3-want combinations, label them yes/no,
+balanced non-repeating 1–3-offer × 1–3-want combinations, label them yes/no
 and export in the exact training-data JSON format.
 
 Static frontend (`index.html`, `style.css`, `app.js`) + Cloudflare Pages
@@ -89,7 +89,6 @@ wrangler pages dev . --d1=DB=mira-labeling-db
   (1×1 … 3×3) so the queue stays balanced. Uniqueness is enforced by a
   `combo_key` (sorted item ids) so the same exact combination is never
   queued twice.
-- **Label** — shows one queued combination at a time with cross-category shared-word highlights.
   (via the free MyMemory API, cached in D1 so repeats are instant) and
   shared-word highlighting across the offer/want texts are both there to
   speed up reading. "Match" / "No match" writes `human_label`, the current
@@ -124,8 +123,6 @@ wrangler pages dev . --d1=DB=mira-labeling-db
 - The offer/want "drafting" in **Create** is template-based, not an LLM
   call — it's meant as a fast starting point you edit, not a finished
   sentence generator.
-- Translation uses MyMemory's free, keyless endpoint, which is rate-limited
-  (~5,000 words/day anonymously). For heavier use, swap `translate.js` for
   a paid provider (e.g. DeepL) — the caching layer stays the same.
 - `labeled_blind` is always recorded as `true`: the labeler only ever sees
   the offer/want text, never a suggested answer.
@@ -143,5 +140,6 @@ The Label tab now supports back/forward navigation, changing an existing label, 
 ### Export format
 Dataset export is JSONL: exactly one compact JSON object per line, saved as `.jsonl`, with no pretty-printed multi-line records.
 
-### Labeling missions
-The dashboard includes a persistent labeling mission with a customizable goal and flag. Missions can be saved as presets, launched to prepare a queue, and completed missions are stored with goal, dates, labeler, and totals.
+
+### Creation missions
+The Create workspace includes a separate mission tracker for writing distinct offer + want pairs. Goals and flag choices can be saved as presets, and completed creation missions are stored with their date, goal, and number of new unique pairs written. A pair counts only when both sides are saved together from the drafting desk; repeated identical pairs for the same labeler are not counted again.

@@ -59,36 +59,116 @@
     </div>
   </section>
 
-  <section class="mission-dock" id="mission-dock" aria-label="Labeling mission">
-    <div class="mission-card card">
-      <div class="mission-flag-wrap">
-        <button id="mission-flag" class="mission-flag" type="button" title="Change mission flag" aria-label="Change mission flag">🏁</button>
-        <span class="mission-spark">✦</span>
+  <!-- LABELING MISSION -->
+  <section class="mission-card" id="mission-card" aria-label="Labeling mission">
+    <div class="mission-main">
+      <div class="mission-flag-wrap" aria-hidden="true">
+        <div class="flag-pole"></div>
+        <div class="flag-cloth" id="mission-flag-cloth">⚑</div>
+        <div class="flag-base"></div>
       </div>
-      <div class="mission-main">
-        <div class="mission-topline"><span class="section-kicker">YOUR LABELING MISSION</span><span id="mission-state" class="mission-state">No mission running</span></div>
-        <div class="mission-title-row">
-          <h3 id="mission-title">Set a goal and make a dent.</h3>
-          <button id="mission-edit-btn" class="btn-text" type="button">edit goal</button>
-        </div>
-        <div class="mission-progress-track"><div id="mission-progress-fill" class="mission-progress-fill"></div><span id="mission-progress-glow" class="mission-progress-glow"></span></div>
-        <div class="mission-progress-meta"><strong id="mission-progress-count">0 / 0</strong><span id="mission-progress-copy">Pick a goal to start.</span></div>
-        <div class="mission-controls" id="mission-controls" hidden>
-          <label class="mission-field"><span>Goal</span><input id="mission-goal" type="number" min="1" max="10000" value="100" inputmode="numeric" /></label>
-          <label class="mission-field"><span>Labeler</span><input id="mission-labeler" type="text" placeholder="Your name" autocomplete="name" /></label>
-          <div class="mission-flags" aria-label="Mission flags">
-            <button type="button" class="mission-flag-choice is-active" data-flag="🏁">🏁</button><button type="button" class="mission-flag-choice" data-flag="🚀">🚀</button><button type="button" class="mission-flag-choice" data-flag="⭐">⭐</button><button type="button" class="mission-flag-choice" data-flag="🪐">🪐</button><button type="button" class="mission-flag-choice" data-flag="⚡">⚡</button>
+      <div class="mission-copy">
+        <div class="mission-kicker"><span>YOUR MISSION</span><span id="mission-status" class="mission-status">Ready</span></div>
+        <h2 id="mission-title">Label 100 activities.</h2>
+        <p>Set a target, launch a batch, and keep the finish line visible while you work.</p>
+        <div class="mission-controls">
+          <label class="mission-goal-field"><span>Goal</span><input id="mission-goal" type="number" min="1" max="10000" value="100" inputmode="numeric" aria-label="Mission goal" /></label>
+          <button id="mission-run-btn" class="btn btn-primary" type="button"><span>Run mission</span><span class="btn-arrow">→</span></button>
+          <div class="mission-flag-picker" aria-label="Choose mission flag">
+            <span>Flag</span>
+            <button type="button" class="mission-flag-choice is-active" data-flag="⚑">⚑</button>
+            <button type="button" class="mission-flag-choice" data-flag="🚩">🚩</button>
+            <button type="button" class="mission-flag-choice" data-flag="⭐">⭐</button>
+            <button type="button" class="mission-flag-choice" data-flag="🚀">🚀</button>
+            <button type="button" class="mission-flag-choice" data-flag="🏁">🏁</button>
           </div>
-          <button id="mission-run-btn" class="btn btn-primary" type="button"><span>Run mission</span><span class="btn-arrow">↗</span></button>
-          <button id="mission-save-preset-btn" class="btn btn-secondary" type="button">Save preset</button>
         </div>
-        <div class="mission-bottom-row">
-          <div id="mission-presets" class="mission-presets"></div>
-          <button id="mission-history-btn" class="btn-text" type="button">mission history</button>
-        </div>
-        <div id="mission-history" class="mission-history" hidden></div>
       </div>
     </div>
+    <div class="mission-progress-area">
+      <div class="mission-progress-head"><strong id="mission-progress-text">0 / 100 labeled</strong><span id="mission-remaining-text">100 to go</span></div>
+      <div class="mission-progress-track"><div id="mission-progress-fill" class="mission-progress-fill"></div></div>
+      <div class="mission-flow" aria-label="Mission progress">
+        <div class="mission-node is-active" id="mission-node-create"><span>01</span><strong>Create</strong><small>build the bank</small></div>
+        <div class="mission-flow-line"><i></i></div>
+        <div class="mission-node" id="mission-node-label"><span>02</span><strong>Label</strong><small>make decisions</small></div>
+        <div class="mission-flow-line"><i></i></div>
+        <div class="mission-node" id="mission-node-goal"><span>03</span><strong>Goal</strong><small>cross the finish line</small></div>
+      </div>
+    </div>
+    <div class="mission-bottom-row">
+      <div class="mission-presets">
+        <div class="mission-subhead"><span>SAVED PRESETS</span><button id="mission-save-preset-btn" class="btn-text" type="button">save current</button></div>
+        <div id="mission-preset-list" class="mission-preset-list"><span class="mission-empty-inline">No presets yet — save a goal you like.</span></div>
+      </div>
+      <div class="mission-history-mini">
+        <div class="mission-subhead"><span>COMPLETED MISSIONS</span><button id="mission-refresh-history-btn" class="btn-text" type="button">refresh</button></div>
+        <div id="mission-history-list" class="mission-history-list"><div class="mission-history-empty">No completed missions yet.</div></div>
+      </div>
+    </div>
+    <p id="mission-status-line" class="status-line" aria-live="polite"></p>
+  </section>
+
+  <!-- CREATE MISSION -->
+  <section class="mission-card create-mission-card" id="create-mission-card" aria-label="Offer and want creation mission">
+    <div class="mission-main">
+      <div class="mission-flag-wrap" aria-hidden="true">
+        <div class="flag-pole"></div>
+        <div class="flag-cloth" id="create-mission-flag-cloth">✦</div>
+        <div class="flag-base"></div>
+      </div>
+      <div class="mission-copy">
+        <div class="mission-kicker"><span>CREATE MISSION</span><span id="create-mission-status" class="mission-status">Ready</span></div>
+        <h2 id="create-mission-title">Write 25 new pairs.</h2>
+        <p>Set a target, start the mission, and watch your unique offer + want pairs add up as you save them.</p>
+        <div class="mission-controls">
+          <label class="mission-goal-field"><span>Goal</span><input id="create-mission-goal" type="number" min="1" max="10000" value="25" inputmode="numeric" aria-label="Creation mission goal" /></label>
+          <button id="create-mission-run-btn" class="btn btn-primary" type="button"><span>Run mission</span><span class="btn-arrow">→</span></button>
+          <div class="mission-flag-picker" aria-label="Choose creation mission flag">
+            <span>Flag</span>
+            <button type="button" class="mission-flag-choice create-mission-flag-choice is-active" data-flag="✦">✦</button>
+            <button type="button" class="mission-flag-choice create-mission-flag-choice" data-flag="🌱">🌱</button>
+            <button type="button" class="mission-flag-choice create-mission-flag-choice" data-flag="💡">💡</button>
+            <button type="button" class="mission-flag-choice create-mission-flag-choice" data-flag="🚀">🚀</button>
+            <button type="button" class="mission-flag-choice create-mission-flag-choice" data-flag="🏁">🏁</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mission-progress-area">
+      <div class="mission-progress-head"><strong id="create-mission-progress-text">0 / 25 pairs written</strong><span id="create-mission-remaining-text">25 to go</span></div>
+      <div class="mission-progress-track"><div id="create-mission-progress-fill" class="mission-progress-fill"></div></div>
+      <div class="mission-flow" aria-label="Creation mission progress">
+        <div class="mission-node is-active" id="create-mission-node-write"><span>01</span><strong>Write</strong><small>shape the language</small></div>
+        <div class="mission-flow-line"><i id="create-mission-line-one"></i></div>
+        <div class="mission-node" id="create-mission-node-pair"><span>02</span><strong>Pair</strong><small>save both sides</small></div>
+        <div class="mission-flow-line"><i id="create-mission-line-two"></i></div>
+        <div class="mission-node" id="create-mission-node-goal"><span>03</span><strong>Goal</strong><small>cross the finish line</small></div>
+      </div>
+    </div>
+    <div class="mission-bottom-row">
+      <div class="mission-presets">
+        <div class="mission-subhead"><span>SAVED PRESETS</span><button id="create-mission-save-preset-btn" class="btn-text" type="button">save current</button></div>
+        <div id="create-mission-preset-list" class="mission-preset-list"><span class="mission-empty-inline">No presets yet — save a goal you like.</span></div>
+      </div>
+      <div class="mission-history-mini">
+        <div class="mission-subhead"><span>COMPLETED MISSIONS</span><button id="create-mission-refresh-history-btn" class="btn-text" type="button">refresh</button></div>
+        <div id="create-mission-history-list" class="mission-history-list"><div class="mission-history-empty">No completed missions yet.</div></div>
+      </div>
+    </div>
+    <div class="pair-quality" aria-label="Pair quality insights">
+      <div class="quality-head"><div><span class="mission-subhead">PAIR QUALITY</span><h3>How your writing is shaping up</h3></div><span id="pair-quality-scope" class="quality-scope">your pairs</span></div>
+      <div class="quality-stats">
+        <div class="quality-stat"><span>Duplicate rate</span><strong id="quality-duplicate-rate">0%</strong><small id="quality-duplicate-detail">0 duplicate attempts</small></div>
+        <div class="quality-stat"><span>Avg. pair length</span><strong id="quality-average-length">0 words</strong><small>offer + want together</small></div>
+        <div class="quality-stat"><span>Unique pairs</span><strong id="quality-unique-pairs">0</strong><small id="quality-attempt-detail">0 save attempts</small></div>
+      </div>
+      <div class="quality-themes">
+        <div class="theme-column"><div class="theme-title"><span>OFFER THEMES</span><small>what people can get</small></div><div id="offer-theme-list" class="theme-list"><div class="theme-empty">No pairs yet.</div></div></div>
+        <div class="theme-column"><div class="theme-title"><span>WANT THEMES</span><small>what people are looking for</small></div><div id="want-theme-list" class="theme-list"><div class="theme-empty">No pairs yet.</div></div></div>
+      </div>
+    </div>
+    <p id="create-mission-status-line" class="status-line" aria-live="polite"></p>
   </section>
 
   <!-- CREATE -->
@@ -399,7 +479,7 @@
         <h2>Export the labeled dataset when the batch is ready.</h2>
         <p>Download one JSON object per line used by the training pipeline, with labels ordered by their saved timestamps.</p>
       </div>
-      <div class="section-badge">JSONL · one record per line</div>
+      <div class="section-badge">JSON · sequential IDs</div>
     </div>
     <div class="panel-grid export-grid">
       <div class="card feature-card">

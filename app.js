@@ -87,96 +87,10 @@ async function activateTab(name) {
   if (name === "label") await loadNextEntry();
   if (name === "export") await loadExportStats();
   if (name === "create") await loadItems();
-  await loadMissions();
 }
 
 document.querySelectorAll(".tab-btn").forEach((btn) => btn.addEventListener("click", () => activateTab(btn.dataset.tab)));
 window.addEventListener("resize", () => moveTabIndicator(document.querySelector(".tab-btn.is-active")));
-
-// ---------- LABELING MISSION ----------
-const missionState = { flag: "🏁" };
-const missionFlagEl = document.getElementById("mission-flag");
-const missionGoalEl = document.getElementById("mission-goal");
-const missionLabelerEl = document.getElementById("mission-labeler");
-const missionControlsEl = document.getElementById("mission-controls");
-const missionHistoryEl = document.getElementById("mission-history");
-
-function missionDate(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-}
-function renderMission(data = {}) {
-  const active = data.active;
-  const stats = data.stats || {};
-  const progress = active ? Number(active.progress || 0) : 0;
-  const goal = active ? Number(active.goal || 0) : Number(missionGoalEl?.value || 0);
-  const pct = goal ? Math.min(100, (progress / goal) * 100) : 0;
-  const fill = document.getElementById("mission-progress-fill");
-  if (fill) fill.style.width = `${pct}%`;
-  document.getElementById("mission-progress-count").textContent = active ? `${progress.toLocaleString()} / ${goal.toLocaleString()}` : "0 / 0";
-  document.getElementById("mission-progress-copy").textContent = active ? (active.remaining ? `${active.remaining.toLocaleString()} labels to go · started ${missionDate(active.started_at)}` : "Mission complete — nice work!") : "Pick a goal to start.";
-  document.getElementById("mission-state").textContent = active ? `${active.flag} in progress` : "No mission running";
-  document.getElementById("mission-title").textContent = active ? `${active.goal.toLocaleString()} labels. Keep the streak alive.` : "Set a goal and make a dent.";
-  missionFlagEl.textContent = active?.flag || missionState.flag || "🏁";
-  if (active) { missionGoalEl.value = active.goal; missionLabelerEl.value = active.labeler || labelerInput?.value || ""; missionState.flag = active.flag; }
-  document.getElementById("mission-progress-glow").style.left = `${Math.max(0, Math.min(99, pct))}%`;
-  document.getElementById("metric-unlabeled").textContent = String(stats.unlabeled ?? "—");
-}
-async function loadMissions() {
-  try {
-    const data = await api("/missions");
-    renderMission(data);
-    const presets = data.presets || [];
-    const presetsEl = document.getElementById("mission-presets");
-    presetsEl.innerHTML = presets.length ? `<span class="mission-presets-label">Saved:</span>${presets.slice(0,5).map(p => `<button class="mission-preset" type="button" data-preset-id="${p.id}" title="${escapeHtml(p.name)}">${escapeHtml(p.flag)} ${escapeHtml(p.name)} · ${Number(p.goal).toLocaleString()}</button>`).join("")}` : `<span class="mission-presets-label">No saved presets yet</span>`;
-    presetsEl.querySelectorAll("[data-preset-id]").forEach(btn => btn.addEventListener("click", () => {
-      const p = presets.find(x => String(x.id) === btn.dataset.presetId); if (!p) return;
-      missionGoalEl.value = p.goal; missionLabelerEl.value = p.labeler || labelerInput.value || ""; missionState.flag = p.flag; missionFlagEl.textContent = p.flag;
-      document.querySelectorAll(".mission-flag-choice").forEach(x => x.classList.toggle("is-active", x.dataset.flag === p.flag));
-      missionControlsEl.hidden = false;
-    }));
-    const historyEl = missionHistoryEl;
-    historyEl.innerHTML = (data.history || []).length ? (data.history || []).map(h => `<div class="mission-history-row"><div class="mission-history-flag">${escapeHtml(h.flag)}</div><div><strong>${Number(h.labels_completed).toLocaleString()} labels completed</strong><span>${escapeHtml(h.labeler || "Unknown")} · ${missionDate(h.completed_at)}</span></div><div class="mission-history-goal">Goal <strong>${Number(h.goal).toLocaleString()}</strong><small>${missionDate(h.started_at)} → ${missionDate(h.completed_at)}</small></div></div>`).join("") : `<div class="history-empty">No completed missions yet. Finish your first one and it will appear here.</div>`;
-  } catch (error) { showToast(error.message, "error"); }
-}
-
-document.getElementById("mission-edit-btn")?.addEventListener("click", () => { missionControlsEl.hidden = !missionControlsEl.hidden; missionGoalEl.focus(); });
-missionFlagEl?.addEventListener("click", () => { missionControlsEl.hidden = false; document.querySelector(".mission-flag-choice")?.focus(); });
-document.querySelectorAll(".mission-flag-choice").forEach(btn => btn.addEventListener("click", () => { missionState.flag = btn.dataset.flag; missionFlagEl.textContent = missionState.flag; document.querySelectorAll(".mission-flag-choice").forEach(x => x.classList.toggle("is-active", x === btn)); }));
-missionLabelerEl?.addEventListener("input", () => { if (labelerInput) labelerInput.value = missionLabelerEl.value; });
-
-document.getElementById("mission-run-btn")?.addEventListener("click", async (event) => {
-  const goal = Math.max(1, Math.min(10000, Number(missionGoalEl.value) || 100));
-  const labeler = String(missionLabelerEl.value || labelerInput.value || "").trim();
-  if (!labeler) { missionLabelerEl.focus(); showToast("Add your labeler name before starting the mission.", "error"); return; }
-  missionGoalEl.value = goal; labelerInput.value = labeler;
-  const button = event.currentTarget; setBusy(button, true, "Launching…");
-  try {
-    const started = await api("/missions", { method: "POST", body: JSON.stringify({ action: "start", goal, flag: missionState.flag, labeler }) });
-    const current = await api("/entries?status=unlabeled&limit=1");
-    if (Number(current.counts?.unlabeled || 0) < goal) {
-      const need = Math.min(1000, Math.max(1, goal - Number(current.counts?.unlabeled || 0)));
-      await api("/generate", { method: "POST", body: JSON.stringify({ count: need }) });
-    }
-    showToast(`${started.flag} Mission started — ${goal.toLocaleString()} labels.`, "success");
-    await loadMissions(); await activateTab("label");
-  } catch (error) { showToast(error.message, "error"); }
-  finally { setBusy(button, false); }
-});
-
-document.getElementById("mission-save-preset-btn")?.addEventListener("click", async () => {
-  const name = prompt("Name this mission preset:", `${missionGoalEl.value || 100} label sprint`);
-  if (!name) return;
-  try {
-    await api("/missions", { method: "POST", body: JSON.stringify({ action: "save-preset", name, goal: missionGoalEl.value, flag: missionState.flag, labeler: missionLabelerEl.value || labelerInput.value }) });
-    await loadMissions(); showToast("Mission preset saved.", "success");
-  } catch (error) { showToast(error.message, "error"); }
-});
-
-document.getElementById("mission-history-btn")?.addEventListener("click", () => {
-  missionHistoryEl.hidden = !missionHistoryEl.hidden;
-  document.getElementById("mission-history-btn").textContent = missionHistoryEl.hidden ? "mission history" : "hide history";
-});
 
 // ---------- helpers ----------
 function lowerFirst(s) {
@@ -272,11 +186,15 @@ document.getElementById("save-draft-btn").addEventListener("click", async (event
   if (!items.length || items.some((item) => !item.text)) { setStatus(document.getElementById("create-status"), "Select at least one non-empty item.", "error"); return; }
   setBusy(button, true, "Saving…");
   try {
-    await api("/items", { method: "POST", body: JSON.stringify({ items }) });
+    const pair = items.length === 2 && items.some((item) => item.type === "offer") && items.some((item) => item.type === "want")
+      ? { owner: getCreateMissionOwner(), offer_text: items.find((item) => item.type === "offer")?.text || "", want_text: items.find((item) => item.type === "want")?.text || "" }
+      : null;
+    await api("/items", { method: "POST", body: JSON.stringify({ items, ...(pair ? { creator_pair: pair } : {}) }) });
     setStatus(document.getElementById("create-status"), `Saved ${items.length} item${items.length > 1 ? "s" : ""} to the bank.`, "success");
     showToast("Item bank updated.", "success");
     phraseInput.value = ""; draftArea.hidden = true;
     await loadItems();
+    await refreshCreateMission();
   } catch (error) {
     setStatus(document.getElementById("create-status"), `Error: ${error.message}`, "error");
     showToast(error.message, "error");
@@ -420,6 +338,7 @@ document.getElementById("generate-btn").addEventListener("click", async (event) 
     renderBucketGrid(res.bucketCounts);
     document.getElementById("metric-unlabeled").textContent = "…";
     showToast(`${res.generated} combinations added.`, "success");
+    await refreshMission();
   } catch (error) {
     setStatus(statusEl, `Error: ${error.message}`, "error"); showToast(error.message, "error");
   } finally { setBusy(button, false); }
@@ -442,11 +361,274 @@ function renderBucketGrid(counts = {}) {
 }
 renderBucketGrid();
 
+// ---------- CREATION MISSION ----------
+const CREATE_MISSION_KEY = "mira_creation_mission_v1";
+let createMission = JSON.parse(localStorage.getItem(CREATE_MISSION_KEY) || "null") || {
+  goal: 25, flag: "✦", active: false, started_at: null, starting_pairs: 0, owner: "default"
+};
+let createMissionPresets = [];
+
+function saveCreateMissionLocal() { localStorage.setItem(CREATE_MISSION_KEY, JSON.stringify(createMission)); }
+function getCreateMissionOwner() { return document.getElementById("labeler-name")?.value.trim() || "default"; }
+function createMissionPercent(pairs) { return Math.min(100, Math.max(0, (pairs / Math.max(1, createMission.goal)) * 100)); }
+function setCreateMissionFlag(flag) {
+  createMission.flag = flag || "✦";
+  saveCreateMissionLocal();
+  document.getElementById("create-mission-flag-cloth").textContent = createMission.flag;
+  document.querySelectorAll(".create-mission-flag-choice").forEach((b) => b.classList.toggle("is-active", b.dataset.flag === createMission.flag));
+}
+function renderCreateMissionPresets() {
+  const el = document.getElementById("create-mission-preset-list");
+  if (!createMissionPresets.length) { el.innerHTML = `<span class="mission-empty-inline">No presets yet — save a goal you like.</span>`; return; }
+  el.innerHTML = createMissionPresets.map((p) => `<div class="mission-preset"><button class="mission-preset-load" type="button" data-create-preset-id="${p.id}">${escapeHtml(p.flag)} ${escapeHtml(p.name)} · ${p.goal}</button><button class="mission-preset-delete" type="button" aria-label="Delete ${escapeHtml(p.name)}" data-delete-create-preset-id="${p.id}">×</button></div>`).join("");
+}
+function renderCreateMissionHistory(history) {
+  const el = document.getElementById("create-mission-history-list");
+  if (!history?.length) { el.innerHTML = `<div class="mission-history-empty">No completed missions yet.</div>`; return; }
+  el.innerHTML = history.slice(0, 20).map((h) => {
+    const date = new Date(h.completed_at).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" });
+    const time = new Date(h.completed_at).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+    return `<div class="mission-history-item"><span class="mission-history-flag">${escapeHtml(h.flag || "✦")}</span><div class="mission-history-copy"><strong>${Number(h.pairs_total || h.goal)} pairs · goal ${Number(h.goal)}</strong><span>${date} · ${time}</span></div><span class="mission-history-total">${Number(h.pairs_total || 0)} new</span></div>`;
+  }).join("");
+}
+function renderPairThemeList(id, themes) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!themes?.length) { el.innerHTML = '<div class="theme-empty">No pairs yet.</div>'; return; }
+  el.innerHTML = themes.map((t) => `<div class="theme-row"><div class="theme-row-copy"><div class="theme-row-label"><strong>${escapeHtml(t.theme)}</strong><span>${Number(t.count)} pairs</span></div><div class="theme-bar"><i style="width:${Math.min(100, Number(t.share || 0))}%"></i></div></div><span>${Number(t.share || 0)}%</span></div>`).join('');
+}
+function renderPairQuality(quality) {
+  const q = quality || {};
+  document.getElementById('quality-duplicate-rate').textContent = `${Number(q.duplicate_rate || 0).toFixed(Number(q.duplicate_rate || 0) % 1 ? 1 : 0)}%`;
+  document.getElementById('quality-duplicate-detail').textContent = `${Number(q.duplicates || 0)} duplicate attempt${Number(q.duplicates || 0) === 1 ? '' : 's'}`;
+  document.getElementById('quality-average-length').textContent = `${Number(q.average_pair_words || 0)} words`;
+  document.getElementById('quality-unique-pairs').textContent = Number(q.unique_pairs || 0).toLocaleString();
+  document.getElementById('quality-attempt-detail').textContent = `${Number(q.attempts || 0).toLocaleString()} save attempt${Number(q.attempts || 0) === 1 ? '' : 's'}`;
+  renderPairThemeList('offer-theme-list', q.offer_themes);
+  renderPairThemeList('want-theme-list', q.want_themes);
+}
+
+function updateCreateMission(pairTotal, history = null) {
+  const goal = Math.max(1, Number(createMission.goal) || 25);
+  const owner = getCreateMissionOwner();
+  const pairs = createMission.active && createMission.owner === owner ? Math.max(0, Number(pairTotal) - Number(createMission.starting_pairs || 0)) : 0;
+  const shown = Math.min(goal, pairs);
+  const pct = createMissionPercent(shown);
+  document.getElementById("create-mission-goal").value = goal;
+  document.getElementById("create-mission-title").textContent = `Write ${goal} new pairs.`;
+  document.getElementById("create-mission-progress-text").textContent = `${shown} / ${goal} pairs written`;
+  document.getElementById("create-mission-remaining-text").textContent = `${Math.max(0, goal - shown)} to go`;
+  document.getElementById("create-mission-progress-fill").style.width = `${pct}%`;
+  document.getElementById("create-mission-node-write").classList.toggle("is-done", createMission.active && shown > 0);
+  document.getElementById("create-mission-node-write").classList.toggle("is-active", !createMission.active);
+  document.getElementById("create-mission-node-pair").classList.toggle("is-active", createMission.active && shown < goal);
+  document.getElementById("create-mission-node-pair").classList.toggle("is-done", createMission.active && shown >= goal);
+  document.getElementById("create-mission-node-goal").classList.toggle("is-active", shown >= goal);
+  document.getElementById("create-mission-node-goal").classList.toggle("is-done", shown >= goal);
+  document.getElementById("create-mission-line-one").style.width = `${createMission.active ? Math.min(100, pct) : 0}%`;
+  document.getElementById("create-mission-line-two").style.width = `${shown >= goal ? 100 : 0}%`;
+  const status = document.getElementById("create-mission-status");
+  status.textContent = shown >= goal ? "Complete" : createMission.active ? "In progress" : "Ready";
+  status.classList.toggle("is-complete", shown >= goal);
+  if (history) renderCreateMissionHistory(history);
+}
+
+async function refreshCreateMission() {
+  try {
+    const owner = getCreateMissionOwner();
+    const data = await api(`/creator-missions?owner=${encodeURIComponent(owner)}`);
+    createMissionPresets = data.presets || [];
+    renderCreateMissionPresets();
+    renderPairQuality(data.quality);
+    const total = Number(data.pairTotal || 0);
+    if (createMission.owner !== owner) {
+      createMission.active = false; createMission.started_at = null; createMission.starting_pairs = total; createMission.owner = owner; saveCreateMissionLocal();
+    }
+    if (createMission.active && total - Number(createMission.starting_pairs || 0) >= Number(createMission.goal || 25)) {
+      const result = await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"complete", owner, goal:createMission.goal, flag:createMission.flag, started_at:createMission.started_at, starting_pairs:createMission.starting_pairs }) });
+      createMission.active = false; createMission.started_at = null; createMission.starting_pairs = total; saveCreateMissionLocal();
+      showToast(`Creation mission complete — ${result.pairs_total} new pairs logged.`, "success");
+      const refreshed = await api(`/creator-missions?owner=${encodeURIComponent(owner)}`);
+      renderCreateMissionHistory(refreshed.history || []);
+    } else renderCreateMissionHistory(data.history || []);
+    updateCreateMission(total);
+  } catch (error) { showToast(error.message, "error"); }
+}
+
+document.getElementById("create-mission-goal").addEventListener("change", () => {
+  const value = Math.max(1, Math.min(10000, Number(document.getElementById("create-mission-goal").value) || 25));
+  createMission.goal = value; saveCreateMissionLocal(); refreshCreateMission();
+});
+document.querySelectorAll(".create-mission-flag-choice").forEach((button) => button.addEventListener("click", () => setCreateMissionFlag(button.dataset.flag)));
+document.getElementById("create-mission-run-btn").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const owner = getCreateMissionOwner();
+  const goal = Math.max(1, Math.min(10000, Number(document.getElementById("create-mission-goal").value) || 25));
+  createMission.goal = goal;
+  setBusy(button, true, "Launching…");
+  try {
+    const data = await api(`/creator-missions?owner=${encodeURIComponent(owner)}`);
+    const total = Number(data.pairTotal || 0);
+    if (!createMission.active || createMission.owner !== owner) {
+      const started = await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"start", owner, goal, flag:createMission.flag }) });
+      createMission.active = true; createMission.owner = owner; createMission.started_at = started.mission.started_at; createMission.starting_pairs = Number(started.mission.starting_pairs || total); saveCreateMissionLocal();
+    }
+    updateCreateMission(total, data.history || []);
+    await activateTab("create");
+    document.getElementById("phrase-input")?.focus();
+    showToast(`Creation mission started — write ${goal} distinct pairs.`, "success");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(button, false); }
+});
+document.getElementById("create-mission-save-preset-btn").addEventListener("click", async () => {
+  const goal = Math.max(1, Math.min(10000, Number(document.getElementById("create-mission-goal").value) || 25));
+  const name = prompt("Name this creation mission preset:", `Create · ${goal}`);
+  if (!name?.trim()) return;
+  try { await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"preset", owner:getCreateMissionOwner(), name:name.trim(), goal, flag:createMission.flag }) }); await refreshCreateMission(); showToast("Creation mission preset saved.", "success"); }
+  catch (error) { showToast(error.message, "error"); }
+});
+document.getElementById("create-mission-preset-list").addEventListener("click", async (event) => {
+  const load = event.target.closest("[data-create-preset-id]");
+  const del = event.target.closest("[data-delete-create-preset-id]");
+  if (load) { const preset = createMissionPresets.find((p) => String(p.id) === load.dataset.createPresetId); if (preset) { createMission.goal = Number(preset.goal); createMission.owner = getCreateMissionOwner(); setCreateMissionFlag(preset.flag); saveCreateMissionLocal(); document.getElementById("create-mission-goal").value = createMission.goal; refreshCreateMission(); showToast(`${preset.name} loaded.`); } }
+  if (del) { if (!confirm("Delete this creation mission preset?")) return; try { await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"delete_preset", owner:getCreateMissionOwner(), id:Number(del.dataset.deleteCreatePresetId) }) }); await refreshCreateMission(); } catch(error) { showToast(error.message,"error"); } }
+});
+document.getElementById("create-mission-refresh-history-btn").addEventListener("click", refreshCreateMission);
+refreshCreateMission();
+
+// ---------- LABELING MISSION ----------
+const MISSION_KEY = "mira_labeling_mission_v2";
+let mission = JSON.parse(localStorage.getItem(MISSION_KEY) || "null") || {
+  goal: 100, flag: "⚑", active: false, started_at: null, starting_labeled: 0, generated_total: 0
+};
+let missionPresets = [];
+
+function saveMissionLocal() { localStorage.setItem(MISSION_KEY, JSON.stringify(mission)); }
+function missionPercent(labeled) { return Math.min(100, Math.max(0, (labeled / Math.max(1, mission.goal)) * 100)); }
+function setMissionFlag(flag) {
+  mission.flag = flag || "⚑";
+  saveMissionLocal();
+  document.getElementById("mission-flag-cloth").textContent = mission.flag;
+  document.querySelectorAll(".mission-flag-choice").forEach((b) => b.classList.toggle("is-active", b.dataset.flag === mission.flag));
+}
+function renderMissionPresets() {
+  const el = document.getElementById("mission-preset-list");
+  if (!missionPresets.length) { el.innerHTML = `<span class="mission-empty-inline">No presets yet — save a goal you like.</span>`; return; }
+  el.innerHTML = missionPresets.map((p) => `<div class="mission-preset"><button class="mission-preset-load" type="button" data-preset-id="${p.id}">${escapeHtml(p.flag)} ${escapeHtml(p.name)} · ${p.goal}</button><button class="mission-preset-delete" type="button" aria-label="Delete ${escapeHtml(p.name)}" data-delete-preset-id="${p.id}">×</button></div>`).join("");
+}
+function renderMissionHistory(history) {
+  const el = document.getElementById("mission-history-list");
+  if (!history?.length) { el.innerHTML = `<div class="mission-history-empty">No completed missions yet.</div>`; return; }
+  el.innerHTML = history.slice(0, 20).map((h) => {
+    const date = new Date(h.completed_at).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" });
+    const time = new Date(h.completed_at).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+    return `<div class="mission-history-item"><span class="mission-history-flag">${escapeHtml(h.flag || "⚑")}</span><div class="mission-history-copy"><strong>${Number(h.labeled_total || h.goal)} labeled · goal ${Number(h.goal)}</strong><span>${date} · ${time}</span></div><span class="mission-history-total">${Number(h.generated_total || 0)} generated</span></div>`;
+  }).join("");
+}
+function updateMission(labeledTotal, history = null) {
+  const goal = Math.max(1, Number(mission.goal) || 100);
+  const labeled = mission.active ? Math.max(0, Number(labeledTotal) - Number(mission.starting_labeled || 0)) : 0;
+  const shown = Math.min(goal, labeled);
+  const pct = missionPercent(shown);
+  document.getElementById("mission-goal").value = goal;
+  document.getElementById("mission-title").textContent = mission.active ? `Label ${goal} activities.` : `Label ${goal} activities.`;
+  document.getElementById("mission-progress-text").textContent = `${shown} / ${goal} labeled`;
+  document.getElementById("mission-remaining-text").textContent = `${Math.max(0, goal - shown)} to go`;
+  document.getElementById("mission-progress-fill").style.width = `${pct}%`;
+  document.getElementById("mission-node-create").classList.toggle("is-done", mission.active && shown > 0);
+  document.getElementById("mission-node-create").classList.toggle("is-active", !mission.active);
+  document.getElementById("mission-node-label").classList.toggle("is-active", mission.active && shown < goal);
+  document.getElementById("mission-node-label").classList.toggle("is-done", mission.active && shown >= goal);
+  document.getElementById("mission-node-goal").classList.toggle("is-active", shown >= goal);
+  document.getElementById("mission-node-goal").classList.toggle("is-done", shown >= goal);
+  const lines = document.querySelectorAll(".mission-flow-line i");
+  if (lines[0]) lines[0].style.width = `${mission.active ? Math.min(100, pct) : 0}%`;
+  if (lines[1]) lines[1].style.width = `${shown >= goal ? 100 : 0}%`;
+  const status = document.getElementById("mission-status");
+  status.textContent = shown >= goal ? "Complete" : mission.active ? "In progress" : "Ready";
+  status.classList.toggle("is-complete", shown >= goal);
+  if (history) renderMissionHistory(history);
+}
+function getMissionOwner() { return document.getElementById("labeler-name")?.value.trim() || "default"; }
+
+async function refreshMission() {
+  try {
+    const [entryData, missionData] = await Promise.all([api("/entries?status=all&limit=1"), api(`/missions?owner=${encodeURIComponent(getMissionOwner())}`)]);
+    missionPresets = missionData.presets || [];
+    renderMissionPresets();
+    const total = Number(entryData.counts?.yes || 0) + Number(entryData.counts?.no || 0);
+    if (mission.active && total - Number(mission.starting_labeled || 0) >= Number(mission.goal || 100)) {
+      const result = await api("/missions", { method:"POST", body:JSON.stringify({ action:"complete", owner:getMissionOwner(), goal:mission.goal, flag:mission.flag, started_at:mission.started_at, starting_labeled:mission.starting_labeled, generated_total:mission.generated_total }) });
+      mission.active = false; mission.started_at = null; mission.starting_labeled = 0; mission.generated_total = 0; saveMissionLocal();
+      showToast(`Mission complete — ${result.labeled_total} labels logged.`, "success");
+      const refreshed = await api(`/missions?owner=${encodeURIComponent(getMissionOwner())}`);
+      renderMissionHistory(refreshed.history || []);
+    }
+    updateMission(total);
+  } catch (error) { showToast(error.message, "error"); }
+}
+
+document.getElementById("mission-goal").addEventListener("change", () => {
+  const value = Math.max(1, Math.min(10000, Number(document.getElementById("mission-goal").value) || 100));
+  mission.goal = value; saveMissionLocal(); refreshMission();
+});
+document.querySelectorAll(".mission-flag-choice").forEach((button) => button.addEventListener("click", () => setMissionFlag(button.dataset.flag)));
+document.getElementById("mission-run-btn").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const goal = Math.max(1, Math.min(10000, Number(document.getElementById("mission-goal").value) || 100));
+  mission.goal = goal;
+  setBusy(button, true, "Launching…");
+  try {
+    const data = await api("/entries?status=all&limit=1");
+    const labeledTotal = Number(data.counts?.yes || 0) + Number(data.counts?.no || 0);
+    if (!mission.active) {
+      const started = await api("/missions", { method:"POST", body:JSON.stringify({ action:"start", owner:getMissionOwner(), goal, flag:mission.flag }) });
+      mission.active = true; mission.started_at = started.mission.started_at; mission.starting_labeled = Number(started.mission.starting_labeled || labeledTotal); mission.generated_total = 0; saveMissionLocal();
+    }
+    const already = Math.max(0, labeledTotal - Number(mission.starting_labeled || labeledTotal));
+    const { counts } = await api("/entries?status=unlabeled&limit=1");
+    const queued = Number(counts?.unlabeled || 0);
+    const needed = Math.max(0, goal - already - queued);
+    if (needed > 0) {
+      let remaining = needed;
+      let generated = 0;
+      while (remaining > 0) {
+        const batch = Math.min(1000, remaining);
+        const result = await api("/generate", { method:"POST", body:JSON.stringify({ count:batch }) });
+        generated += Number(result.generated || 0);
+        remaining -= Number(result.generated || 0);
+        if (!result.generated || result.exhausted) break;
+      }
+      mission.generated_total += generated; saveMissionLocal();
+      showToast(`Mission loaded ${generated} fresh activities.`, generated ? "success" : "error");
+    } else showToast("Your mission queue is ready — keep labeling!", "success");
+    await refreshMission();
+    await activateTab("label");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(button, false); }
+});
+document.getElementById("mission-save-preset-btn").addEventListener("click", async () => {
+  const goal = Math.max(1, Math.min(10000, Number(document.getElementById("mission-goal").value) || 100));
+  const defaultName = `Mission · ${goal}`;
+  const name = prompt("Name this mission preset:", defaultName);
+  if (!name?.trim()) return;
+  try { await api("/missions", { method:"POST", body:JSON.stringify({ action:"preset", owner:getMissionOwner(), name:name.trim(), goal, flag:mission.flag }) }); await refreshMission(); showToast("Mission preset saved.", "success"); }
+  catch (error) { showToast(error.message, "error"); }
+});
+document.getElementById("mission-preset-list").addEventListener("click", async (event) => {
+  const load = event.target.closest("[data-preset-id]");
+  const del = event.target.closest("[data-delete-preset-id]");
+  if (load) { const preset = missionPresets.find((p) => String(p.id) === load.dataset.presetId); if (preset) { mission.goal = Number(preset.goal); setMissionFlag(preset.flag); saveMissionLocal(); document.getElementById("mission-goal").value = mission.goal; refreshMission(); showToast(`${preset.name} loaded.`); } }
+  if (del) { if (!confirm("Delete this mission preset?")) return; try { await api("/missions", { method:"POST", body:JSON.stringify({ action:"delete_preset", owner:getMissionOwner(), id:Number(del.dataset.deletePresetId) }) }); await refreshMission(); } catch(error) { showToast(error.message,"error"); } }
+});
+document.getElementById("mission-refresh-history-btn").addEventListener("click", refreshMission);
+refreshMission();
+
 // ---------- LABEL ----------
 const HIGHLIGHT_COLORS = ["#fde68a", "#bfdbfe", "#fbcfe8", "#bbf7d0", "#ddd6fe", "#fed7aa"];
 const labelerInput = document.getElementById("labeler-name");
 labelerInput.value = localStorage.getItem("mira_labeler_name") || "";
-labelerInput.addEventListener("input", () => localStorage.setItem("mira_labeler_name", labelerInput.value));
+labelerInput.addEventListener("input", () => { localStorage.setItem("mira_labeler_name", labelerInput.value); refreshMission(); refreshCreateMission(); });
 let currentEntry = null;
 let labelEntries = [];
 let labelIndex = -1;
@@ -525,7 +707,6 @@ async function renderEntry(entry) {
   document.getElementById("entry-wants").innerHTML = entry.wants.map((text, i) => `<div class="entry-item"><div class="en">${wantHtml[i]}</div></div>`).join("");
 }
 function escapeHtml(text) { return String(text).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
-
 document.getElementById("label-back-btn").addEventListener("click", async () => { if (labelIndex > 0) await showLabelEntry(labelEntries[labelIndex - 1], labelIndex - 1); });
 document.getElementById("label-forward-btn").addEventListener("click", async () => { if (labelIndex < labelEntries.length - 1) await showLabelEntry(labelEntries[labelIndex + 1], labelIndex + 1); });
 
@@ -536,7 +717,7 @@ document.getElementById("label-reset-btn").addEventListener("click", async () =>
   try {
     await api("/label", { method: "PUT", body: JSON.stringify({ id: currentEntry.id, labeler, acted_at: formatLocalISO(new Date()) }) });
     showToast(`Entry #${currentEntry.id} reset.`, "success");
-    await loadNextEntry(); await loadLabelHistory(); await loadMissions();
+    await loadNextEntry(); await loadLabelHistory(); await refreshMission();
   } catch (error) { showToast(error.message, "error"); }
 });
 
@@ -547,7 +728,7 @@ document.getElementById("label-delete-btn").addEventListener("click", async () =
   try {
     await api(`/label?id=${encodeURIComponent(currentEntry.id)}&labeler=${encodeURIComponent(labeler)}`, { method: "DELETE" });
     showToast(`Entry #${currentEntry.id} deleted.`, "success");
-    await loadNextEntry(); await loadLabelHistory(); await loadMissions();
+    await loadNextEntry(); await loadLabelHistory(); await refreshMission();
   } catch (error) { showToast(error.message, "error"); }
 });
 
@@ -562,7 +743,7 @@ async function labelCurrent(humanLabel) {
     await api("/label", { method: "POST", body: JSON.stringify({ id: currentEntry.id, human_label: humanLabel, labeler, labeled_at: formatLocalISO(new Date()) }) });
     await new Promise((resolve) => setTimeout(resolve, 150)); feedback.classList.remove("is-active");
     showToast(currentEntry.status === "labeled" ? `Entry #${currentEntry.id} updated.` : `Entry #${currentEntry.id} labeled.`, "success");
-    await loadNextEntry(); await loadLabelHistory(); await loadMissions();
+    await loadNextEntry(); await loadLabelHistory(); await refreshMission();
   } catch (error) { feedback.classList.remove("is-active"); showToast(error.message, "error"); }
   finally { labelingBusy = false; }
 }
@@ -999,7 +1180,6 @@ const rippleStyle = document.createElement("style"); rippleStyle.textContent = "
 // ---------- bootstrap ----------
 (async function bootstrap() {
   moveTabIndicator(document.querySelector(".tab-btn.is-active"));
-loadMissions();
   await loadItems();
   await loadNextEntry();
 })();
