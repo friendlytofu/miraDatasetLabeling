@@ -428,7 +428,7 @@
 
     <div class="history-panel card">
       <div class="history-heading">
-        <div><span class="section-kicker">LABEL HISTORY</span><h3>Review activity</h3><p class="hint compact">Select any label history you want to work with. Export selected labels or remove history records in bulk without changing the underlying activities.</p></div>
+        <div><span class="section-kicker">LABEL HISTORY</span><h3>Review activity</h3><p class="hint compact">Select label history to release, export, or remove. History and release membership stay linked: removing a label record returns its activity to the unlabeled queue so it cannot appear in the labeled export.</p></div>
         <button id="refresh-history-btn" class="btn-text" type="button">refresh</button>
       </div>
       <div class="history-toolbar">
@@ -440,7 +440,7 @@
           <option value="all">All labels</option><option value="yes">Match</option><option value="no">No match</option>
         </select>
         <button id="history-export-selected-btn" class="btn btn-secondary" type="button">Export selected</button>
-        <button id="history-delete-selected-btn" class="btn-text danger-text" type="button">Delete selected history</button>
+        <button id="history-delete-selected-btn" class="btn-text danger-text" type="button">Unlink & delete selected</button>
       </div>
       <div id="history-selection-status" class="history-selection-status" aria-live="polite">0 selected</div>
       <div id="label-history-list" class="label-history-list"><div class="history-empty">Loading history…</div></div>
@@ -461,10 +461,15 @@
       <div class="card feature-card">
         <div class="card-topline"><span class="step-number">05</span><span>Release package</span></div>
         <h3>Dataset snapshot</h3>
+        <p class="hint compact">This release is linked to current label history. Only activities that still have an active saved label are included.</p>
         <div id="export-stats" class="export-stats"></div>
         <div class="export-callout"><span>✓</span><div><strong>Blind labeling preserved</strong><p>Exports retain the stored decision and labeler metadata without exposing a suggested answer during review.</p></div></div>
-        <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Download JSONL</span><span class="btn-arrow">↓</span></button>
+        <div class="export-actions">
+          <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Download labeled JSONL</span><span class="btn-arrow">↓</span></button>
+          <button id="export-history-btn" class="btn btn-secondary btn-wide" type="button">Choose from label history</button>
+        </div>
         <p id="export-status" class="status-line" aria-live="polite"></p>
+        <p class="hint compact export-link-note">Deleted or unlinked label activities are automatically excluded from this release.</p>
       </div>
       <div class="card preview-card">
         <div class="card-topline"><span class="step-number">06</span><span>Format preview</span></div>

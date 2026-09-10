@@ -24,6 +24,21 @@ export async function onRequestDelete({ request, env }) {
   if (!ids.length) return errorJson("Select at least one history record.");
   if (ids.length > 500) return errorJson("You can delete up to 500 history records at once.");
   const placeholders = ids.map(() => "?").join(",");
+  const { results: selected } = await env.DB.prepare(
+    `SELECT id, entry_id, action FROM label_history WHERE id IN (${placeholders})`
+  ).bind(...ids).all();
+  const entryIds = [...new Set((selected || []).map((row) => Number(row.entry_id)).filter((id) => Number.isInteger(id) && id > 0))];
+
+  // History and release membership are linked: removing label-history records
+  // also removes the corresponding entries from the labeled release by
+  // returning them to the unlabeled queue. The underlying offer/want content
+  // is preserved for relabeling.
+  if (entryIds.length) {
+    const entryPlaceholders = entryIds.map(() => "?").join(",");
+    await env.DB.prepare(
+      `UPDATE entries SET status='unlabeled', human_label=NULL, labeler=NULL, labeled_blind=NULL, labeled_at=NULL WHERE id IN (${entryPlaceholders})`
+    ).bind(...entryIds).run();
+  }
   await env.DB.prepare(`DELETE FROM label_history WHERE id IN (${placeholders})`).bind(...ids).run();
-  return json({ deleted: ids.length });
+  return json({ deleted: ids.length, unlinked_entries: entryIds.length });
 }

@@ -126,3 +126,7 @@ wrangler pages dev . --d1=DB=mira-labeling-db
 - `labeled_blind` is always recorded as `true`: the labeler only ever sees
   the offer/want text, never a suggested answer.
 
+
+## Fresh labeling reset
+
+Migration `0010_reset_label_data.sql` clears all existing label history and resets every dataset entry to `unlabeled` while preserving the underlying activities and offer/want pairs. Apply this migration to start labeling from a clean slate.

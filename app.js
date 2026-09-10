@@ -929,14 +929,15 @@ document.getElementById("history-export-selected-btn")?.addEventListener("click"
 document.getElementById("history-delete-selected-btn")?.addEventListener("click", async (event) => {
   const ids = [...selectedHistoryIds];
   if (!ids.length) { showToast("Select history records to delete.", "error"); return; }
-  if (!confirm(`Delete ${ids.length} selected history record${ids.length === 1 ? "" : "s"}? This removes history only; activities and their current labels stay intact.`)) return;
+  if (!confirm(`Unlink and delete ${ids.length} selected label history record${ids.length === 1 ? "" : "s"}? The linked activities will return to the unlabeled queue and will no longer appear in the labeled export.`)) return;
   const button = event.currentTarget;
   setBusy(button, true, "Deleting…");
   try {
     await api("/history", { method: "DELETE", body: JSON.stringify({ ids }) });
     selectedHistoryIds.clear();
     await loadLabelHistory();
-    showToast(`Deleted ${ids.length} history record${ids.length === 1 ? "" : "s"}.`, "success");
+    showToast(`Unlinked ${ids.length} history record${ids.length === 1 ? "" : "s"}; linked activities are back in the labeling queue.`, "success");
+    await loadExportStats();
   } catch (error) { showToast(error.message, "error"); }
   finally { setBusy(button, false); }
 });
@@ -968,6 +969,11 @@ async function downloadExport(urlPath, button, status) {
 }
 
 document.getElementById("export-btn").addEventListener("click", (event) => downloadExport("/api/export", event.currentTarget, document.getElementById("export-status")));
+document.getElementById("export-history-btn")?.addEventListener("click", () => {
+  const tab = document.querySelector('.tab-btn[data-tab="label"]');
+  if (tab) tab.click();
+  setTimeout(() => document.getElementById("label-history-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+});
 
 // ---------- gentle interactivity ----------
 document.querySelectorAll(".btn, .suggestion-chip, .preset-btn, .icon-btn").forEach((button) => {
