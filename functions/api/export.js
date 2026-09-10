@@ -68,7 +68,7 @@ export async function onRequestGet({ request, env }) {
           blocked_relationships: pairRelationshipsForEntry(entry, report.repeatedRelationships, maxPairUses),
         })),
         excluded_tasks_total: report.removedRows.length,
-        max_pair_uses,
+        max_pair_uses: maxPairUses,
         policy: `Keep the first ${maxPairUses} labeled task appearances of each normalized offer × want relationship; later tasks containing an overused relationship are quarantined from the clean export.`,
       });
     }
