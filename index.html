@@ -303,11 +303,10 @@
   <section class="quality-dashboard" id="quality-dashboard" aria-label="Pair quality insights">
     <div class="quality-dashboard-head">
       <div><span class="section-kicker">DATA QUALITY</span><h2>Pair quality, right now.</h2><p>Re-examine only the offer + want pairs currently in the bank. Label history, save attempts, and old snapshots never affect this check.</p></div>
-      <div class="quality-dashboard-actions"><label class="quality-scope-picker"><span>Scope</span><select id="quality-scope-select"><option value="all">All users</option><option value="active">Active user</option></select></label><button id="quality-refresh-btn" class="btn btn-secondary" type="button">Re-examine current pairs</button><button id="quality-clear-btn" class="btn-text" type="button">Clear assessment</button></div>
+      <div class="quality-dashboard-actions"><label class="quality-scope-picker"><span>Scope</span><select id="quality-scope-select"><option value="active" selected>Active user</option><option value="all">All users</option></select></label><button id="quality-refresh-btn" class="btn btn-secondary" type="button">Re-examine current pairs</button><button id="quality-clear-btn" class="btn-text" type="button">Clear assessment</button></div>
     </div>
     <div class="quality-dashboard-stats">
       <div class="quality-big-stat"><span>Current pairs</span><strong id="global-quality-pairs">0</strong><small>offer + want pairs in the bank</small></div>
-      <div class="quality-big-stat"><span>Current duplicate rate</span><strong id="global-quality-duplicate">0%</strong><small id="global-quality-duplicate-detail">0 duplicate records in the current bank</small></div>
       <div class="quality-big-stat"><span>Average pair length</span><strong id="global-quality-length">0 words</strong><small>offer + want together</small></div>
     </div>
     <div class="quality-dashboard-grid">

@@ -531,21 +531,18 @@ document.getElementById("user-code-btn")?.addEventListener("click",async()=>{
 });
 document.getElementById("users-refresh-btn")?.addEventListener("click", loadUsers);
 
-// Pair quality is a dataset-wide dashboard; it can optionally be narrowed to the verified user.
+// Pair quality is scoped to the active verified user by default; it can optionally show all users.
 function renderQualityTrend(quality){
   const el=document.getElementById("quality-trend-chart");
   if(!el) return;
   const q=quality||{};
   const pairs=Number(q.current_pairs ?? q.unique_pairs ?? 0);
-  const duplicates=Number(q.duplicates||0);
   const avg=Number(q.average_pair_words||0);
-  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${duplicates.toLocaleString()}</strong><span>repeated / near-duplicate pairs</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Re-examined ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. This assessment uses only distinct current offer + want pairs, collapsing exact repeats and tiny copy-edit variants. Label history, save attempts, and old snapshots are excluded.</div>`;
+  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Re-examined ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. This assessment uses only distinct current offer + want pairs. Label history, save attempts, and old snapshots are excluded.</div>`;
 }
 
 function clearQualityAssessment(){
   document.getElementById("global-quality-pairs").textContent="—";
-  document.getElementById("global-quality-duplicate").textContent="—";
-  document.getElementById("global-quality-duplicate-detail").textContent="assessment cleared";
   document.getElementById("global-quality-length").textContent="—";
   document.getElementById("quality-chart-caption").textContent="not examined yet";
   const chart=document.getElementById("quality-trend-chart");
@@ -566,8 +563,6 @@ async function refreshQualityDashboard(){
     const data=await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"analyze_quality", ...(activeOwner ? { owner: activeOwner } : {}) }) });
     const q=data.quality||{};
     document.getElementById("global-quality-pairs").textContent=Number(q.current_pairs ?? q.unique_pairs ?? 0).toLocaleString();
-    document.getElementById("global-quality-duplicate").textContent=`${Number(q.duplicate_rate||0)}%`;
-    document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} repeated or near-duplicate record${Number(q.duplicates||0)===1?'':'s'} in current bank`;
     document.getElementById("global-quality-length").textContent=`${Number(q.average_pair_words||0)} words`;
     document.getElementById("quality-chart-caption").textContent=scope==='all'?'current bank':`${activeUser?.name||'active user'} current bank`;
     renderQualityTrend(q); renderGlobalThemes("global-offer-themes",q.offer_themes); renderGlobalThemes("global-want-themes",q.want_themes);
