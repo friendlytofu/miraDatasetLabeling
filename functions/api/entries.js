@@ -59,6 +59,15 @@ export async function onRequestDelete({ request, env }) {
     await env.DB.prepare(`DELETE FROM label_history`).run();
     return json({ reset: true, labels_cleared: true });
   }
+  if (action === "clear_unlabeled") {
+    const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM entries WHERE status='unlabeled'").first();
+    // Only generated tasks that have never been labeled are removed. Labeled
+    // entries and their label history remain untouched.
+    await env.DB.prepare("DELETE FROM label_history WHERE entry_id IN (SELECT id FROM entries WHERE status='unlabeled')").run();
+    await env.DB.prepare("DELETE FROM entries WHERE status='unlabeled'").run();
+    return json({ cleared: true, unlabeled_only: true, deleted_entries: Number(row?.total || 0) });
+  }
+
   if (action === "clear") {
     const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM entries").first();
     await env.DB.prepare("DELETE FROM label_history").run();

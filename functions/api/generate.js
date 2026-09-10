@@ -34,28 +34,51 @@ function buildSourceGroups(items) {
 // A "yes candidate" is built from the same source phrase; a "no candidate"
 // deliberately crosses source phrases. This uses the provenance already attached
 // to the item bank, without pretending that a generated candidate has been human-labeled.
+function pickItemsFromGroups(groups, count, allowedKeys, excludedIds = new Set()) {
+  const keys = sample(allowedKeys, allowedKeys.length);
+  const items = [];
+  for (const key of keys) {
+    const available = (groups.get(key) || []).filter(item => !excludedIds.has(item.id));
+    if (!available.length) continue;
+    const take = Math.min(count - items.length, available.length);
+    items.push(...sample(available, take));
+    if (items.length >= count) break;
+  }
+  return items;
+}
+
 function candidateForClass(kind, bucket, offerPool, wantPool, offerGroups, wantGroups) {
+  const offerSourceKeys = [...offerGroups.keys()];
+  const wantSourceKeys = [...wantGroups.keys()];
+
   if (kind === "yes") {
-    const sharedKeys = [...offerGroups.keys()].filter((key) => wantGroups.has(key));
+    // A positive multi-item task can draw from several source phrases. Every
+    // selected item comes from a source phrase that exists on both sides, so
+    // 2x1, 1x2, 2x2, 3x3, etc. remain possible even when each source has only
+    // one offer and one want.
+    const sharedKeys = offerSourceKeys.filter((key) => wantGroups.has(key));
     if (!sharedKeys.length) return null;
-    const key = sample(sharedKeys, 1)[0];
-    const offers = sample(offerGroups.get(key), bucket.offerCount);
-    const wants = sample(wantGroups.get(key), bucket.wantCount);
+    const offers = pickItemsFromGroups(offerGroups, bucket.offerCount, sharedKeys);
+    const wants = pickItemsFromGroups(wantGroups, bucket.wantCount, sharedKeys);
     if (offers.length !== bucket.offerCount || wants.length !== bucket.wantCount) return null;
     return { offers, wants };
   }
 
-  // For a negative candidate, choose offers and wants whose source phrases differ.
-  const offerSourceKeys = [...offerGroups.keys()];
-  const wantSourceKeys = [...wantGroups.keys()];
-  if (offerSourceKeys.length < 1 || wantSourceKeys.length < 1) return null;
-  for (let i = 0; i < 20; i++) {
-    const ok = sample(offerSourceKeys, 1)[0];
-    const wk = sample(wantSourceKeys, 1)[0];
-    if (ok === wk) continue;
-    const offers = sample(offerGroups.get(ok), bucket.offerCount);
-    const wants = sample(wantGroups.get(wk), bucket.wantCount);
-    if (offers.length === bucket.offerCount && wants.length === bucket.wantCount) return { offers, wants };
+  // A negative multi-item task draws each side from source phrases that do not
+  // overlap. This creates genuinely varied 2x1/1x2/2x2/3x3 tasks rather than
+  // falling back to 1x1 whenever each source phrase has only one item.
+  for (let i = 0; i < 30; i++) {
+    const shuffledOffers = sample(offerSourceKeys, offerSourceKeys.length);
+    const shuffledWants = sample(wantSourceKeys, wantSourceKeys.length);
+    for (const firstOfferKey of shuffledOffers) {
+      const possibleOfferKeys = [firstOfferKey, ...shuffledOffers.filter(k => k !== firstOfferKey)];
+      const offers = pickItemsFromGroups(offerGroups, bucket.offerCount, possibleOfferKeys);
+      if (offers.length !== bucket.offerCount) continue;
+      const usedOfferSources = new Set(offers.map(item => sourceKey(item)).filter(Boolean));
+      const disjointWantKeys = shuffledWants.filter(key => !usedOfferSources.has(key));
+      const wants = pickItemsFromGroups(wantGroups, bucket.wantCount, disjointWantKeys);
+      if (wants.length === bucket.wantCount) return { offers, wants };
+    }
   }
   return null;
 }
@@ -100,11 +123,37 @@ export async function onRequestPost({ request, env }) {
 
   const classCounts = { yes: 0, no: 0 };
 
+  const bucketCounts = {};
+  function bucketKey(bucket) { return `${bucket.offerCount}x${bucket.wantCount}`; }
+  function bucketCanSupportClass(kind, bucket) {
+    if (!hasProvenance) return true;
+    if (kind === "yes") {
+      const sharedKeys = [...offerGroups.keys()].filter((key) => wantGroups.has(key));
+      const offerCapacity = sharedKeys.reduce((n, key) => n + (offerGroups.get(key)?.length || 0), 0);
+      const wantCapacity = sharedKeys.reduce((n, key) => n + (wantGroups.get(key)?.length || 0), 0);
+      return sharedKeys.length > 0 && offerCapacity >= bucket.offerCount && wantCapacity >= bucket.wantCount;
+    }
+    // There must be enough items on each side after choosing disjoint source
+    // sets. The exact candidate is still validated by candidateForClass().
+    return offerSourceKeysWithCapacity(offerGroups, 1).length > 0 &&
+      wantSourceKeysWithCapacity(wantGroups, 1).length > 0 &&
+      (offerGroups.size > 1 || wantGroups.size > 1);
+  }
+  function chooseBucket(kind) {
+    const candidates = feasible.filter(bucket => bucketCanSupportClass(kind, bucket));
+    if (!candidates.length) return null;
+    // Prefer buckets that have appeared least in this run, then rotate among
+    // them. This prevents a stream of 1x1 tasks while still respecting quotas.
+    const minCount = Math.min(...candidates.map(b => bucketCounts[bucketKey(b)] || 0));
+    const leastUsed = candidates.filter(b => (bucketCounts[bucketKey(b)] || 0) === minCount);
+    return leastUsed[bucketIdx++ % leastUsed.length];
+  }
+
   async function insertCandidate(kind) {
     if (!feasible.length) return false;
     for (let outer = 0; outer < feasible.length * 2; outer++) {
-      const bucket = feasible[bucketIdx % feasible.length];
-      bucketIdx++;
+      const bucket = chooseBucket(kind);
+      if (!bucket) return false;
       for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_TURN; attempt++) {
         let pair;
         if (hasProvenance) pair = candidateForClass(kind, bucket, offerPool, wantPool, offerGroups, wantGroups);
@@ -134,6 +183,8 @@ export async function onRequestPost({ request, env }) {
 
         inserted.push({ id: res.meta.last_row_id, ...bucket, balanceClass: hasProvenance ? kind : "unclassified" });
         classCounts[hasProvenance ? kind : "no"]++;
+        const bk = bucketKey(bucket);
+        bucketCounts[bk] = (bucketCounts[bk] || 0) + 1;
         return true;
       }
     }
@@ -157,7 +208,6 @@ export async function onRequestPost({ request, env }) {
     break;
   }
 
-  const bucketCounts = {};
   for (const e of inserted) {
     const k = `${e.offerCount}x${e.wantCount}`;
     bucketCounts[k] = (bucketCounts[k] || 0) + 1;

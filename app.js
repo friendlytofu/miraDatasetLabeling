@@ -871,14 +871,14 @@ document.getElementById("reset-all-labels-btn")?.addEventListener("click", async
 });
 
 document.getElementById("delete-all-tasks-btn")?.addEventListener("click", async (event) => {
-  if (!confirm("DELETE ALL CURRENT LABELING TASKS? This removes every generated labeling task and its label history. Your source items, users, and creation-pair data are preserved. This cannot be undone.")) return;
-  if (!confirm("Final check: permanently clear the entire labeling queue?")) return;
+  if (!confirm("DELETE ALL UNLABELED LABELING TASKS? Already labeled tasks and their label history will be preserved. Source items, users, and creation-pair data are preserved. This cannot be undone.")) return;
+  if (!confirm("Final check: permanently clear only the unlabeled labeling queue?")) return;
   setBusy(event.currentTarget, true, "Clearing…");
   try {
-    const result = await api("/entries?action=clear", { method:"DELETE" });
+    const result = await api("/entries?action=clear_unlabeled", { method:"DELETE" });
     selectedHistoryIds.clear(); currentEntry = null; labelEntries = []; labelIndex = -1;
     await loadNextEntry(); await loadLabelHistory(); await loadExportStats();
-    showToast(`Cleared ${Number(result.deleted_entries || 0)} labeling tasks.`, "success");
+    showToast(`Cleared ${Number(result.deleted_entries || 0)} unlabeled labeling tasks. Labeled work was preserved.`, "success");
   } catch (error) { showToast(error.message, "error"); }
   finally { setBusy(event.currentTarget, false); }
 });
