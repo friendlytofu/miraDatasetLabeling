@@ -48,20 +48,63 @@ function cleanName(value) { return String(value || "").trim().replace(/\s+/g, " 
 function cleanCode(value) { return String(value || "").trim().slice(0, 120); }
 function ownerKey(id) { return `user:${Number(id)}`; }
 
+function qualityText(value) {
+  return String(value || '').toLocaleLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function editSimilarity(a, b) {
+  const left = qualityText(a), right = qualityText(b);
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const short = left.length <= right.length ? left : right;
+  const long = left.length <= right.length ? right : left;
+  if (long.length - short.length > Math.max(24, Math.ceil(long.length * 0.02))) return 0;
+  let prev = Array.from({length: short.length + 1}, (_, i) => i);
+  for (let j = 1; j <= long.length; j++) {
+    const cur = [j];
+    for (let i = 1; i <= short.length; i++) {
+      cur[i] = Math.min(cur[i - 1] + 1, prev[i] + 1, prev[i - 1] + (short[i - 1] === long[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return 1 - prev[short.length] / long.length;
+}
+
+function sameCurrentPair(a, b) {
+  if (a.pair_key === b.pair_key) return true;
+  return editSimilarity(a.offer_text, b.offer_text) >= 0.985 &&
+    editSimilarity(a.want_text, b.want_text) >= 0.985;
+}
+
+async function currentPairCount(env, owner) {
+  const rows = (await env.DB.prepare(
+    "SELECT pair_key, offer_text, want_text FROM creator_pairs WHERE owner=? ORDER BY id ASC"
+  ).bind(owner).all()).results || [];
+  const current = [];
+  for (const row of rows) {
+    if (!current.some(existing => sameCurrentPair(existing, row))) current.push(row);
+  }
+  return current.length;
+}
+
 async function statsFor(env, user) {
   const owner = ownerKey(user.id);
-  const [pairs, labels, createMissions, activeCreate] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) AS total FROM creator_pairs WHERE owner=?").bind(owner).first(),
+  const [pairTotal, labels, createMissions, activeCreate] = await Promise.all([
+    currentPairCount(env, owner),
     env.DB.prepare("SELECT COUNT(*) AS total FROM entries WHERE status='labeled' AND labeler=?").bind(user.name).first(),
     env.DB.prepare("SELECT COUNT(*) AS total FROM creator_mission_history WHERE owner=?").bind(owner).first(),
     env.DB.prepare("SELECT * FROM active_creator_missions WHERE owner=?").bind(owner).first()
   ]);
   return {
     labels: Number(labels?.total || 0),
-    pairs: Number(pairs?.total || 0),
+    pairs: pairTotal,
     creation_missions: Number(createMissions?.total || 0),
-    total: Number(labels?.total || 0) + Number(pairs?.total || 0),
-    active_creation_mission: activeCreate ? { goal:Number(activeCreate.goal), progress:Math.max(0,Number(pairs?.total||0)-Number(activeCreate.starting_pairs||0)), flag:activeCreate.flag } : null
+    total: Number(labels?.total || 0) + pairTotal,
+    active_creation_mission: activeCreate ? { goal:Number(activeCreate.goal), progress:Math.max(0, pairTotal-Number(activeCreate.starting_pairs||0)), flag:activeCreate.flag } : null
   };
 }
 

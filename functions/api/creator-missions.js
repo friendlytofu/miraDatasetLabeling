@@ -89,8 +89,14 @@ function qualityPairDuplicate(a, b) {
     editSimilarity(a.want_text, b.want_text) >= 0.985;
 }
 async function pairCount(env, owner) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM creator_pairs WHERE owner=?").bind(owner).first();
-  return Number(row?.total || 0);
+  const rows = (await env.DB.prepare(
+    "SELECT pair_key, offer_text, want_text FROM creator_pairs WHERE owner=? ORDER BY id ASC"
+  ).bind(owner).all()).results || [];
+  const current = [];
+  for (const row of rows) {
+    if (!current.some(existing => qualityPairDuplicate(existing, row))) current.push(row);
+  }
+  return current.length;
 }
 
 // Older versions stored authored offers/wants only in items. Reconcile that
