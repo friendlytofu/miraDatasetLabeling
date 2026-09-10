@@ -125,6 +125,11 @@ export async function onRequestPost({ request, env }) {
 
   const bucketCounts = {};
   function bucketKey(bucket) { return `${bucket.offerCount}x${bucket.wantCount}`; }
+  function sourceKeysWithCapacity(groups, minCount = 1) {
+    return [...groups.entries()]
+      .filter(([, items]) => (items?.length || 0) >= minCount)
+      .map(([key]) => key);
+  }
   function bucketCanSupportClass(kind, bucket) {
     if (!hasProvenance) return true;
     if (kind === "yes") {
@@ -135,8 +140,8 @@ export async function onRequestPost({ request, env }) {
     }
     // There must be enough items on each side after choosing disjoint source
     // sets. The exact candidate is still validated by candidateForClass().
-    return offerSourceKeysWithCapacity(offerGroups, 1).length > 0 &&
-      wantSourceKeysWithCapacity(wantGroups, 1).length > 0 &&
+    return sourceKeysWithCapacity(offerGroups, 1).length > 0 &&
+      sourceKeysWithCapacity(wantGroups, 1).length > 0 &&
       (offerGroups.size > 1 || wantGroups.size > 1);
   }
   function chooseBucket(kind) {
