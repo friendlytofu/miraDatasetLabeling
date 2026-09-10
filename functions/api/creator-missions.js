@@ -150,52 +150,47 @@ function themeOf(text) {
   return THEME_RULES.find(([, rule]) => rule.test(value))?.[0] || 'General & everyday';
 }
 async function qualityStats(env, owner = null) {
+  // Quality is a snapshot of the CURRENT offer + want bank only.
+  // Do not use creator_pair_events or quality snapshots here: those are historical
+  // records and must never inflate the current dataset assessment.
   const where = owner ? " WHERE owner=?" : "";
   const bind = owner ? [owner] : [];
-  const uniqueRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM creator_pairs${where}`).bind(...bind).first();
-  const eventRow = await env.DB.prepare(`SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events${where}`).bind(...bind).first();
+  const pairRows = (await env.DB.prepare(
+    `SELECT id, owner, pair_key, offer_text, want_text, created_at FROM creator_pairs${where} ORDER BY id ASC`
+  ).bind(...bind).all()).results || [];
 
-  // Analyze every saved pair. If an older deployment has pair events without the
-  // corresponding creator_pairs row, include those event pairs as a legacy fallback.
-  const pairRows = (await env.DB.prepare(`SELECT pair_key,offer_text,want_text FROM creator_pairs${where} ORDER BY id ASC`).bind(...bind).all()).results || [];
-  const eventRows = (await env.DB.prepare(`SELECT pair_key,offer_text,want_text,created_at FROM creator_pair_events${where} ORDER BY id ASC`).bind(...bind).all()).results || [];
-  // The global dashboard represents the dataset, not ownership rows. The same
-  // pair can temporarily exist under more than one owner while legacy data is
-  // being reconciled, so collapse by normalized pair key for the all-user view.
-  const seen = new Set();
-  const uniquePairs = [];
+  const normalizedKeys = new Set();
+  const offerThemes = {}; const wantThemes = {};
+  let totalWords = 0;
   for (const pair of pairRows) {
     const key = String(pair.pair_key || pairKey(pair.offer_text, pair.want_text));
-    if (!seen.has(key)) { seen.add(key); uniquePairs.push({ ...pair, pair_key:key }); }
-  }
-  for (const event of eventRows) {
-    const key = String(event.pair_key || pairKey(event.offer_text, event.want_text));
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniquePairs.push({ pair_key:key, offer_text:event.offer_text, want_text:event.want_text, created_at:event.created_at });
-    }
-  }
-  pairRows.length = 0;
-  pairRows.push(...uniquePairs);
-
-  const attempts = Number(eventRow?.attempts || 0);
-  const duplicates = Number(eventRow?.duplicates || 0);
-  const totalWords = pairRows.reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
-  const offerThemes = {}; const wantThemes = {};
-  for (const pair of pairRows) {
+    normalizedKeys.add(key);
+    totalWords += `${pair.offer_text || ''} ${pair.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length;
     const ot = themeOf(pair.offer_text); const wt = themeOf(pair.want_text);
     offerThemes[ot] = (offerThemes[ot] || 0) + 1;
     wantThemes[wt] = (wantThemes[wt] || 0) + 1;
   }
-  const top = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([theme,count])=>({theme,count,share:pairRows.length ? Math.round(count/pairRows.length*1000)/10 : 0}));
+
+  // A duplicate here means the SAME normalized offer + want pair currently exists
+  // more than once in the current bank (for example, under different owners).
+  // Historical save attempts are intentionally excluded.
+  const duplicateCount = Math.max(0, pairRows.length - normalizedKeys.size);
+  const duplicateRate = pairRows.length ? Math.round(duplicateCount / pairRows.length * 1000) / 10 : 0;
+  const top = (obj) => Object.entries(obj)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,8)
+    .map(([theme,count])=>({theme,count,share:pairRows.length ? Math.round(count/pairRows.length*1000)/10 : 0}));
+
   return {
-    unique_pairs: pairRows.length || Number(uniqueRow?.total || 0),
-    attempts,
-    duplicates,
-    duplicate_rate: attempts ? Math.round(duplicates/attempts*1000)/10 : 0,
+    unique_pairs: pairRows.length,
+    current_pairs: pairRows.length,
+    attempts: pairRows.length,
+    duplicates: duplicateCount,
+    duplicate_rate: duplicateRate,
     average_pair_words: pairRows.length ? Math.round(totalWords/pairRows.length*10)/10 : 0,
-    offer_themes:top(offerThemes),
-    want_themes:top(wantThemes)
+    offer_themes: top(offerThemes),
+    want_themes: top(wantThemes),
+    assessed_at: new Date().toISOString()
   };
 }
 
@@ -228,14 +223,8 @@ export async function onRequestGet({ request, env }) {
   const history = owner ? (await env.DB.prepare("SELECT * FROM creator_mission_history WHERE owner=? ORDER BY completed_at DESC, id DESC LIMIT 100").bind(owner).all()).results : [];
   const active = owner ? await env.DB.prepare("SELECT * FROM active_creator_missions WHERE owner=?").bind(owner).first() : null;
   const scope = owner ? "owner" : "all";
-  let quality = await qualityStats(env, owner);
-  let trend = await qualityTrend(env, scope, owner);
-  if (!trend.length && quality.unique_pairs) {
-    const snap = await saveQualitySnapshot(env, scope, owner);
-    quality = snap;
-    trend = [snap];
-  }
-  return json({ presets, history, active: active || null, pairTotal: quality.unique_pairs, quality, trend });
+  const quality = await qualityStats(env, owner);
+  return json({ presets, history, active: active || null, pairTotal: quality.current_pairs, quality, trend: [] });
 }
 
 export async function onRequestPost({ request, env }) {
@@ -253,16 +242,13 @@ export async function onRequestPost({ request, env }) {
     const key = pairKey(offer, want);
     const result = await env.DB.prepare("INSERT OR IGNORE INTO creator_pairs(owner,pair_key,offer_text,want_text,created_at) VALUES (?,?,?,?,?)")
       .bind(owner, key, offer, want, now).run();
-    await saveQualitySnapshot(env, "owner", owner);
-    await saveQualitySnapshot(env, "all", null);
     return json({ recorded: Number(result.meta.changes || 0) > 0, pairTotal: await pairCount(env, owner) });
   }
 
   if (body.action === "analyze_quality") {
     const requestedOwner = body.owner ? ownerOf(body.owner) : null;
-    const scope = requestedOwner ? "owner" : "all";
-    const snapshot = await saveQualitySnapshot(env, scope, requestedOwner);
-    return json({ analyzed:true, quality:snapshot });
+    const quality = await qualityStats(env, requestedOwner);
+    return json({ analyzed:true, current_only:true, quality });
   }
 
   if (body.action === "preset") {

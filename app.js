@@ -190,10 +190,27 @@ document.getElementById("save-draft-btn").addEventListener("click", async (event
     const pair = items.length === 2 && items.some((item) => item.type === "offer") && items.some((item) => item.type === "want")
       ? { owner: getCreateMissionOwner(), offer_text: items.find((item) => item.type === "offer")?.text || "", want_text: items.find((item) => item.type === "want")?.text || "" }
       : null;
-    await api("/items", { method: "POST", body: JSON.stringify({ items, ...(pair ? { creator_pair: pair } : {}) }) });
+    // Keep the same idempotency key while a save is being retried. If the network
+    // drops after D1 commits, pressing Save again returns the original upload instead
+    // of creating duplicate items or pair events. A changed draft gets a fresh key.
+    const uploadPayload = JSON.stringify({ items, ...(pair ? { creator_pair: pair } : {}) });
+    const payloadFingerprint = uploadPayload;
+    let uploadKey = draftArea.dataset.uploadKey || "";
+    if (!uploadKey || draftArea.dataset.uploadFingerprint !== payloadFingerprint) {
+      uploadKey = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      draftArea.dataset.uploadKey = uploadKey;
+      draftArea.dataset.uploadFingerprint = payloadFingerprint;
+    }
+    const saved = await api("/items", {
+      method: "POST",
+      headers: { "Idempotency-Key": uploadKey },
+      body: uploadPayload
+    });
     setStatus(document.getElementById("create-status"), `Saved ${items.length} item${items.length > 1 ? "s" : ""} to the bank.`, "success");
     showToast("Item bank updated.", "success");
     phraseInput.value = ""; draftArea.hidden = true;
+    delete draftArea.dataset.uploadKey;
+    delete draftArea.dataset.uploadFingerprint;
     await loadItems();
     await refreshCreateMission();
     await refreshQualityDashboard();
@@ -515,16 +532,16 @@ document.getElementById("user-code-btn")?.addEventListener("click",async()=>{
 document.getElementById("users-refresh-btn")?.addEventListener("click", loadUsers);
 
 // Pair quality is a dataset-wide dashboard; it can optionally be narrowed to the verified user.
-function renderQualityTrend(trend) {
+function renderQualityTrend(quality){
   const el=document.getElementById("quality-trend-chart");
-  if(!trend?.length){el.innerHTML='<div class="theme-empty">No quality snapshots yet.</div>';return;}
-  const rows=trend.slice(-30), max=Math.max(1,...rows.map(r=>Number(r.duplicate_rate||0))), width=680,height=190,pad=28;
-  const pts=rows.map((r,i)=>{const x=pad+(rows.length===1?(width-pad*2)/2:(i/(rows.length-1))*(width-pad*2));const y=height-pad-(Number(r.duplicate_rate||0)/max)*(height-pad*2);return [x,y];});
-  const poly=pts.map(p=>p.join(',')).join(' ');
-  const circles=pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.2"><title>${escapeHtml(new Date(rows[i].captured_at).toLocaleString())}: ${Number(rows[i].duplicate_rate||0)}% duplicate rate · ${Number(rows[i].total_pairs||0)} pairs · ${Number(rows[i].average_pair_words||0)} avg words</title></circle>`).join('');
-  const labels=rows.length>1?[rows[0],rows[rows.length-1]].map((r,i)=>`<text x="${i?width-pad:pad}" y="${height-6}" text-anchor="${i?'end':'start'}">${escapeHtml(new Date(r.captured_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}))}</text>`).join(''):'';
-  el.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Duplicate rate quality trend"><line x1="${pad}" y1="${height-pad}" x2="${width-pad}" y2="${height-pad}" class="chart-axis"/><polyline points="${poly}" class="quality-line"/>${circles}${labels}</svg><div class="quality-chart-legend"><span><i></i>Duplicate rate</span><span>Latest: <strong>${Number(rows.at(-1).duplicate_rate||0)}%</strong></span></div>`;
+  if(!el) return;
+  const q=quality||{};
+  const pairs=Number(q.current_pairs ?? q.unique_pairs ?? 0);
+  const duplicates=Number(q.duplicates||0);
+  const avg=Number(q.average_pair_words||0);
+  el.innerHTML=`<div class="quality-current-grid"><div><strong>${pairs.toLocaleString()}</strong><span>current pairs checked</span></div><div><strong>${duplicates.toLocaleString()}</strong><span>repeated current pairs</span></div><div><strong>${avg} words</strong><span>average offer + want</span></div></div><div class="quality-current-note">Assessed ${q.assessed_at ? escapeHtml(new Date(q.assessed_at).toLocaleString()) : 'just now'}. No label history or historical save attempts are included.</div>`;
 }
+
 function renderGlobalThemes(id,themes){renderPairThemeList(id,themes);}
 async function refreshQualityDashboard(){
   try {
@@ -534,10 +551,10 @@ async function refreshQualityDashboard(){
     const data=await api(`/creator-missions${owner}`); const q=data.quality||{};
     document.getElementById("global-quality-pairs").textContent=Number(q.unique_pairs||0).toLocaleString();
     document.getElementById("global-quality-duplicate").textContent=`${Number(q.duplicate_rate||0)}%`;
-    document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} duplicate attempts · ${Number(q.attempts||0).toLocaleString()} attempts`;
+    document.getElementById("global-quality-duplicate-detail").textContent=`${Number(q.duplicates||0).toLocaleString()} repeated current pair${Number(q.duplicates||0)===1?'':'s'}`;
     document.getElementById("global-quality-length").textContent=`${Number(q.average_pair_words||0)} words`;
-    document.getElementById("quality-chart-caption").textContent=scope==='all'?'all saved snapshots':`${activeUser?.name||'active user'} snapshots`;
-    renderQualityTrend(data.trend||[]); renderGlobalThemes("global-offer-themes",q.offer_themes); renderGlobalThemes("global-want-themes",q.want_themes);
+    document.getElementById("quality-chart-caption").textContent=scope==='all'?'current bank':`${activeUser?.name||'active user'} current bank`;
+    renderQualityTrend(q); renderGlobalThemes("global-offer-themes",q.offer_themes); renderGlobalThemes("global-want-themes",q.want_themes);
   } catch(error){showToast(error.message,"error");}
 }
 document.getElementById("quality-scope-select").addEventListener("change",refreshQualityDashboard);

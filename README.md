@@ -130,3 +130,11 @@ wrangler pages dev . --d1=DB=mira-labeling-db
 ## Fresh labeling reset
 
 Migration `0010_reset_label_data.sql` clears all existing label history and resets every dataset entry to `unlabeled` while preserving the underlying activities and offer/want pairs. Apply this migration to start labeling from a clean slate.
+
+## Upload 500 fix
+
+Fixed a post-save HTTP 500 in `functions/api/items.js`. The owner quality snapshot INSERT had a placeholder/bind mismatch, so the item could be committed successfully and the API could still throw 500 afterward. The snapshot SQL now has the correct bindings, and quality snapshot writes are best-effort so analytics failures cannot report a successful item save as a failed upload.
+
+### Upload retry protection
+
+Create/draft saves use an idempotency key. If a request succeeds in D1 but the browser loses the response, pressing Save again reuses the same key and the API returns the existing upload rather than inserting duplicate items or creator-pair events. Migration `0011_idempotent_uploads.sql` adds the supporting indexes; the API also self-heals older D1 databases by adding the columns when possible.
