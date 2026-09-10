@@ -48,8 +48,8 @@ async function ensureTables(env) {
 }
 
 function ownerOf(value) { return String(value || "default").trim().slice(0, 120) || "default"; }
-function normalize(value) { return String(value || "").trim().replace(/\\s+/g, " ").toLocaleLowerCase(); }
-function pairKey(offer, want) { return `${normalize(offer)}\\u001f${normalize(want)}`; }
+function normalize(value) { return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase(); }
+function pairKey(offer, want) { return `${normalize(offer)}\u001f${normalize(want)}`; }
 async function pairCount(env, owner) {
   const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM creator_pairs WHERE owner=?").bind(owner).first();
   return Number(row?.total || 0);
@@ -71,25 +71,43 @@ function themeOf(text) {
   return THEME_RULES.find(([, rule]) => rule.test(value))?.[0] || 'General & everyday';
 }
 async function qualityStats(env, owner = null) {
-  const pairWhere = owner ? " WHERE owner=?" : "";
-  const eventWhere = owner ? " WHERE owner=?" : "";
-  const pairBind = owner ? [owner] : [];
-  const eventBind = owner ? [owner] : [];
-  const uniqueRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM creator_pairs${pairWhere}`).bind(...pairBind).first();
-  const eventRow = await env.DB.prepare(`SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events${eventWhere}`).bind(...eventBind).first();
-  // Intentionally analyze every saved pair; this is the source of truth for the quality dashboard.
-  const pairs = (await env.DB.prepare(`SELECT offer_text,want_text FROM creator_pairs${pairWhere} ORDER BY id ASC`).bind(...pairBind).all()).results || [];
+  const where = owner ? " WHERE owner=?" : "";
+  const bind = owner ? [owner] : [];
+  const uniqueRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM creator_pairs${where}`).bind(...bind).first();
+  const eventRow = await env.DB.prepare(`SELECT COUNT(*) AS attempts, COALESCE(SUM(is_duplicate),0) AS duplicates FROM creator_pair_events${where}`).bind(...bind).first();
+
+  // Analyze every saved pair. If an older deployment has pair events without the
+  // corresponding creator_pairs row, include those event pairs as a legacy fallback.
+  const pairRows = (await env.DB.prepare(`SELECT pair_key,offer_text,want_text FROM creator_pairs${where} ORDER BY id ASC`).bind(...bind).all()).results || [];
+  const eventRows = (await env.DB.prepare(`SELECT pair_key,offer_text,want_text,created_at FROM creator_pair_events${where} ORDER BY id ASC`).bind(...bind).all()).results || [];
+  const seen = new Set(pairRows.map(p => String(p.pair_key)));
+  for (const event of eventRows) {
+    const key = String(event.pair_key || `${normalize(event.offer_text)}\u001f${normalize(event.want_text)}`);
+    if (!seen.has(key)) {
+      seen.add(key);
+      pairRows.push({ pair_key:key, offer_text:event.offer_text, want_text:event.want_text, created_at:event.created_at });
+    }
+  }
+
   const attempts = Number(eventRow?.attempts || 0);
   const duplicates = Number(eventRow?.duplicates || 0);
-  const totalWords = pairs.reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
+  const totalWords = pairRows.reduce((sum,p) => sum + `${p.offer_text || ''} ${p.want_text || ''}`.trim().split(/\s+/).filter(Boolean).length, 0);
   const offerThemes = {}; const wantThemes = {};
-  for (const pair of pairs) {
+  for (const pair of pairRows) {
     const ot = themeOf(pair.offer_text); const wt = themeOf(pair.want_text);
     offerThemes[ot] = (offerThemes[ot] || 0) + 1;
     wantThemes[wt] = (wantThemes[wt] || 0) + 1;
   }
-  const top = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([theme,count])=>({theme,count,share:pairs.length ? Math.round(count/pairs.length*1000)/10 : 0}));
-  return { unique_pairs:Number(uniqueRow?.total || 0), attempts, duplicates, duplicate_rate: attempts ? Math.round(duplicates/attempts*1000)/10 : 0, average_pair_words:pairs.length ? Math.round(totalWords/pairs.length*10)/10 : 0, offer_themes:top(offerThemes), want_themes:top(wantThemes) };
+  const top = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([theme,count])=>({theme,count,share:pairRows.length ? Math.round(count/pairRows.length*1000)/10 : 0}));
+  return {
+    unique_pairs: pairRows.length || Number(uniqueRow?.total || 0),
+    attempts,
+    duplicates,
+    duplicate_rate: attempts ? Math.round(duplicates/attempts*1000)/10 : 0,
+    average_pair_words: pairRows.length ? Math.round(totalWords/pairRows.length*10)/10 : 0,
+    offer_themes:top(offerThemes),
+    want_themes:top(wantThemes)
+  };
 }
 
 async function saveQualitySnapshot(env, scope = 'all', owner = null) {
@@ -147,6 +165,13 @@ export async function onRequestPost({ request, env }) {
     await saveQualitySnapshot(env, "owner", owner);
     await saveQualitySnapshot(env, "all", null);
     return json({ recorded: Number(result.meta.changes || 0) > 0, pairTotal: await pairCount(env, owner) });
+  }
+
+  if (body.action === "analyze_quality") {
+    const requestedOwner = body.owner ? ownerOf(body.owner) : null;
+    const scope = requestedOwner ? "owner" : "all";
+    const snapshot = await saveQualitySnapshot(env, scope, requestedOwner);
+    return json({ analyzed:true, quality:snapshot });
   }
 
   if (body.action === "preset") {

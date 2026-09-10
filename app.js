@@ -367,6 +367,7 @@ renderBucketGrid();
 const USER_KEY = "mira_active_user_v1";
 const storedUser = JSON.parse(localStorage.getItem(USER_KEY) || "null");
 let activeUser = storedUser ? {...storedUser, verified:false} : null;
+let selectedUserId = activeUser?.id ? Number(activeUser.id) : null;
 let usersCache = [];
 function saveActiveUser() { localStorage.setItem(USER_KEY, JSON.stringify(activeUser || null)); }
 function isVerifiedUser() { return !!(activeUser?.id && activeUser?.owner && activeUser?.verified === true); }
@@ -378,7 +379,8 @@ function renderUsers(users) {
   const select = document.getElementById("user-select");
   if (!select) return;
   select.innerHTML = `<option value="">Select a user</option>` + usersCache.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
-  if (activeUser?.id && usersCache.some(u => Number(u.id) === Number(activeUser.id))) select.value = String(activeUser.id);
+  const preferredId = selectedUserId || activeUser?.id;
+  if (preferredId && usersCache.some(u => Number(u.id) === Number(preferredId))) select.value = String(preferredId);
   const verified = isVerifiedUser();
   document.getElementById("user-verified-pill").textContent = verified ? `✓ ${activeUser.name}` : "No user verified";
   document.getElementById("user-verified-pill").classList.toggle("is-verified", verified);
@@ -402,19 +404,26 @@ async function loadUsers() {
   try { const data=await api("/users"); renderUsers(data.users||[]); renderBulletin(data.users||[]); } catch(error) { showToast(error.message,"error"); }
 }
 async function verifySelectedUser() {
-  const id=Number(document.getElementById("user-select").value); const code=document.getElementById("user-code").value.trim();
+  const id=Number(selectedUserId || document.getElementById("user-select").value); const code=document.getElementById("user-code").value.trim();
   if (!id) { setUserStatus("Select a user first.","error"); return; }
   if (!code) { setUserStatus("Enter the user code to verify.","error"); return; }
   try {
     const data=await api("/users",{method:"POST",body:JSON.stringify({action:"validate",id,code})});
+    selectedUserId = Number(data.user.id);
     activeUser={...data.user,verified:true}; saveActiveUser(); switchMissionOwner(activeUser.owner); document.getElementById("user-code").value="";
     setUserStatus(`Verified as ${activeUser.name}. Your missions and progress now follow this account.`,"success");
     renderUsers(usersCache); await Promise.all([refreshCreateMission(),refreshQualityDashboard(),loadItems()]);
-  } catch(error) { activeUser=null; saveActiveUser(); renderUsers(usersCache); setUserStatus(error.message,"error"); }
+  } catch(error) {
+    // Keep the selected user in place so a mistyped code never makes the dropdown appear broken.
+    setUserStatus(error.message,"error");
+    renderUsers(usersCache);
+  }
 }
 document.getElementById("user-select").addEventListener("change", () => {
-  const id=Number(document.getElementById("user-select").value); const user=usersCache.find(u=>Number(u.id)===id);
-  if (!user) { activeUser=null; saveActiveUser(); switchMissionOwner("default"); renderUsers(usersCache); return; }
+  const id=Number(document.getElementById("user-select").value); selectedUserId = id || null;
+  const user=usersCache.find(u=>Number(u.id)===id);
+  if (!user) { activeUser=null; saveActiveUser(); switchMissionOwner("default"); renderUsers(usersCache); setUserStatus(""); return; }
+  // Selection and verification are separate: selecting a name must not destroy the selection if the code is wrong.
   activeUser={id:user.id,name:user.name,owner:`user:${user.id}`,verified:false}; saveActiveUser(); switchMissionOwner(activeUser.owner); renderUsers(usersCache); setUserStatus(`Enter ${user.name}'s code to continue.`);
 });
 document.getElementById("user-verify-btn").addEventListener("click", verifySelectedUser);
@@ -452,6 +461,7 @@ async function refreshQualityDashboard(){
   try {
     const scope=document.getElementById("quality-scope-select")?.value||"all";
     const owner=scope==='active' && isVerifiedUser() ? `?owner=${encodeURIComponent(activeUser.owner)}` : '';
+    await api("/creator-missions", { method:"POST", body:JSON.stringify({ action:"analyze_quality", ...(scope==='active' && isVerifiedUser() ? { owner: activeUser.owner } : {}) }) });
     const data=await api(`/creator-missions${owner}`); const q=data.quality||{};
     document.getElementById("global-quality-pairs").textContent=Number(q.unique_pairs||0).toLocaleString();
     document.getElementById("global-quality-duplicate").textContent=`${Number(q.duplicate_rate||0)}%`;
