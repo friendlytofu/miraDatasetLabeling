@@ -480,12 +480,37 @@
         <p class="hint compact">This release is linked to current label history. Only activities that still have an active saved label are included.</p>
         <div id="export-stats" class="export-stats"></div>
         <div class="export-callout"><span>✓</span><div><strong>Blind labeling preserved</strong><p>Exports retain the stored decision and labeler metadata without exposing a suggested answer during review.</p></div></div>
+        <div class="export-quality-box">
+          <div class="export-quality-head"><div><span class="section-kicker">PRE-EXPORT QUALITY GATE</span><h4>Check pair reuse before release</h4><p class="hint compact">Mira scans the labeled queue for the same normalized offer × want relationship appearing too often. The clean export keeps the earliest appearances and quarantines later tasks containing overused relationships. Database records are never deleted by this check.</p></div><span class="quality-shield">◎</span></div>
+          <div class="export-quality-controls">
+            <label class="field field-inline"><span>Allow each pair up to</span><select id="export-max-pair-uses"><option value="1">1 appearance</option><option value="2" selected>2 appearances</option><option value="3">3 appearances</option><option value="4">4 appearances</option><option value="5">5 appearances</option></select></label>
+            <button id="export-quality-check-btn" class="btn btn-secondary" type="button">Preview clean release</button>
+          </div>
+          <div id="export-quality-summary" class="export-quality-summary" aria-live="polite"><span class="quality-state-dot"></span><span>No quality check run yet.</span></div>
+          <div id="export-quality-details" class="export-quality-details" hidden></div>
+        </div>
         <div class="export-actions">
-          <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Download labeled JSONL</span><span class="btn-arrow">↓</span></button>
+          <button id="export-btn" class="btn btn-primary btn-wide" type="button"><span>Check & export clean JSONL</span><span class="btn-arrow">↓</span></button>
+          <button id="export-raw-btn" class="btn btn-secondary btn-wide" type="button">Download raw labeled JSONL</button>
           <button id="export-history-btn" class="btn btn-secondary btn-wide" type="button">Choose from label history</button>
         </div>
         <p id="export-status" class="status-line" aria-live="polite"></p>
         <p class="hint compact export-link-note">Deleted or unlinked label activities are automatically excluded from this release.</p>
+        <div id="export-preview-modal" class="export-preview-modal" hidden aria-hidden="true">
+          <div class="export-preview-backdrop" data-close-export-preview></div>
+          <div class="export-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="export-preview-title">
+            <div class="export-preview-head">
+              <div><span class="section-kicker">RELEASE PREVIEW</span><h3 id="export-preview-title">Review what will be excluded</h3><p id="export-preview-subtitle" class="hint compact">Mira will not delete these tasks. They will simply be left out of this clean JSONL.</p></div>
+              <button class="modal-close" type="button" data-close-export-preview aria-label="Close preview">×</button>
+            </div>
+            <div id="export-preview-summary" class="export-preview-summary"></div>
+            <div class="export-preview-columns">
+              <div class="export-preview-panel"><div class="export-preview-panel-head"><strong>Offer × want matches to exclude</strong><span id="export-preview-match-count"></span></div><div id="export-preview-matches" class="export-preview-list"></div></div>
+              <div class="export-preview-panel"><div class="export-preview-panel-head"><strong>Labeling tasks to exclude</strong><span id="export-preview-task-count"></span></div><div id="export-preview-tasks" class="export-preview-list"></div></div>
+            </div>
+            <div class="export-preview-foot"><span class="hint compact">The clean export keeps the earliest allowed appearances of each relationship. Database records stay unchanged.</span><div><button class="btn btn-secondary" type="button" data-close-export-preview>Keep reviewing</button><button id="export-preview-confirm-btn" class="btn btn-primary" type="button">Export clean JSONL</button></div></div>
+          </div>
+        </div>
         <div class="export-editor">
           <div class="editor-heading"><div><span class="section-kicker">EXPORT EDITOR</span><h3>Edit the release clearly</h3><p class="hint compact">Load the current labeled JSONL, make corrections, validate it, then download your edited file. This does not change the database.</p></div></div>
           <div class="export-editor-actions"><button id="load-export-editor-btn" class="btn btn-secondary" type="button">Load labeled export</button><label class="file-btn btn btn-secondary">Open JSONL file<input id="export-file-input" type="file" accept=".jsonl,.json,.txt,application/json,application/jsonl,text/plain" hidden></label><button id="validate-export-btn" class="btn btn-secondary" type="button">Validate</button><button id="download-edited-export-btn" class="btn btn-primary" type="button">Download edited JSONL</button></div>

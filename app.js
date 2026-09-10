@@ -1073,7 +1073,104 @@ async function downloadExport(urlPath, button, status) {
   finally { setBusy(button, false); }
 }
 
-document.getElementById("export-btn").addEventListener("click", (event) => downloadExport("/api/export", event.currentTarget, document.getElementById("export-status")));
+const exportQualityCheckBtn = document.getElementById("export-quality-check-btn");
+const exportQualitySummary = document.getElementById("export-quality-summary");
+const exportQualityDetails = document.getElementById("export-quality-details");
+const exportMaxPairUses = document.getElementById("export-max-pair-uses");
+
+function renderExportQuality(report) {
+  if (!exportQualitySummary || !exportQualityDetails) return;
+  exportQualitySummary.classList.remove("is-good", "is-warning");
+  if (!report?.total) {
+    exportQualitySummary.innerHTML = '<span class="quality-state-dot"></span><span>No labeled records are available to check.</span>';
+    exportQualityDetails.hidden = true;
+    return;
+  }
+  if (!report.removed_if_cleaned) {
+    exportQualitySummary.classList.add("is-good");
+    exportQualitySummary.innerHTML = `<span class="quality-state-dot"></span><span>Clean release: ${Number(report.total).toLocaleString()} labeled tasks checked · no pair relationship exceeds ${report.max_pair_uses} appearances.</span>`;
+    exportQualityDetails.hidden = true;
+    return;
+  }
+  exportQualitySummary.classList.add("is-warning");
+  exportQualitySummary.innerHTML = `<span class="quality-state-dot"></span><span>Preview required: ${Number(report.removed_if_cleaned).toLocaleString()} task${report.removed_if_cleaned === 1 ? "" : "s"} would be excluded from the clean release.</span>`;
+  const rows = (report.repeated_relationships || []).map(item => `<div class="repeat-row"><span class="repeat-pair"><strong>${escapeHtml(item.offer)}</strong> × ${escapeHtml(item.want)}</span><span class="repeat-count">${Number(item.appearances)}× · ${Number(item.excess)} over limit</span></div>`).join("");
+  exportQualityDetails.innerHTML = `<div><strong>Repeated relationships detected</strong></div>${rows || "<div>No relationship details available.</div>"}`;
+  exportQualityDetails.hidden = false;
+}
+
+function openExportPreview(report) {
+  const modal = document.getElementById("export-preview-modal");
+  if (!modal) return;
+  const summary = document.getElementById("export-preview-summary");
+  const matches = document.getElementById("export-preview-matches");
+  const tasks = document.getElementById("export-preview-tasks");
+  const matchCount = document.getElementById("export-preview-match-count");
+  const taskCount = document.getElementById("export-preview-task-count");
+  const excludedTasks = report?.excluded_tasks || [];
+  const repeated = report?.repeated_relationships || [];
+  const cleanTotal = Math.max(0, Number(report?.clean_total || 0));
+  const total = Number(report?.total || 0);
+  summary.innerHTML = `<div><strong>${cleanTotal.toLocaleString()}</strong><span>tasks in clean release</span></div><div class="preview-excluded-stat"><strong>${excludedTasks.length.toLocaleString()}${Number(report?.excluded_tasks_total || 0) > excludedTasks.length ? "+" : ""}</strong><span>tasks excluded</span></div><div><strong>${repeated.length.toLocaleString()}${repeated.length >= 50 ? "+" : ""}</strong><span>overused matches</span></div><div><strong>${Number(report?.max_pair_uses || 2)}×</strong><span>allowed per match</span></div>`;
+  matchCount.textContent = `${repeated.length}${repeated.length >= 50 ? "+" : ""} shown`;
+  taskCount.textContent = `${excludedTasks.length}${Number(report?.excluded_tasks_total || 0) > excludedTasks.length ? ` of ${Number(report.excluded_tasks_total)}` : ""} shown`;
+  matches.innerHTML = repeated.length ? repeated.map((item, i) => `<div class="preview-match-row"><span class="preview-index">${i + 1}</span><div class="preview-match-copy"><strong>${escapeHtml(item.offer)}</strong><span>×</span><strong>${escapeHtml(item.want)}</strong></div><div class="preview-match-meta">${Number(item.appearances)} appearances<br><small>${Number(item.excess)} over ${Number(report.max_pair_uses)}</small></div></div>`).join("") : `<div class="preview-empty">No overused offer × want matches. Nothing will be excluded.</div>`;
+  tasks.innerHTML = excludedTasks.length ? excludedTasks.map((item, i) => {
+    const blocked = item.blocked_relationships || [];
+    const offerText = (item.offers || []).join(" · ");
+    const wantText = (item.wants || []).join(" · ");
+    return `<div class="preview-task-row"><div class="preview-task-head"><span class="preview-index">${i + 1}</span><strong>Task #${escapeHtml(item.entry_id)}</strong><span class="preview-task-label">${escapeHtml(item.human_label || "labeled")}</span></div><div class="preview-task-pair"><div><small>OFFERS</small><span>${escapeHtml(offerText || "—")}</span></div><div><small>WANTS</small><span>${escapeHtml(wantText || "—")}</span></div></div><div class="preview-blocked"><small>WHY EXCLUDED</small>${blocked.map(rel => `<span><strong>${escapeHtml(rel.offer)}</strong> × ${escapeHtml(rel.want)} · ${Number(rel.appearances)}× (allowed ${Number(rel.allowed)}×)</span>`).join("")}</div></div>`;
+  }).join("") : `<div class="preview-empty">No labeling tasks need to be excluded. The clean release contains all ${total.toLocaleString()} labeled tasks.</div>`;
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeExportPreview() {
+  const modal = document.getElementById("export-preview-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+async function checkExportQuality(button = exportQualityCheckBtn, showPreview = false) {
+  const maxUses = Math.max(1, Math.min(10, Number(exportMaxPairUses?.value) || 2));
+  if (button) setBusy(button, true, "Checking…");
+  setStatus(document.getElementById("export-status"), "Scanning labeled tasks for repeated offer × want relationships…");
+  try {
+    const res = await fetch(`/api/export?quality_check=1&max_pair_uses=${maxUses}`, { credentials:"same-origin", cache:"no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { window.location.replace("/login.html"); return null; }
+    if (!res.ok) throw new Error(data.error || `Quality check failed (${res.status})`);
+    renderExportQuality(data);
+    setStatus(document.getElementById("export-status"), data.removed_if_cleaned ? `Quality check complete · ${data.removed_if_cleaned} task${data.removed_if_cleaned === 1 ? "" : "s"} flagged for repeated-pair reuse.` : `Quality check complete · ${data.total} labeled tasks are within the reuse limit.`, data.removed_if_cleaned ? "error" : "success");
+    if (showPreview) openExportPreview(data);
+    return data;
+  } catch (error) {
+    setStatus(document.getElementById("export-status"), error.message, "error");
+    showToast(error.message, "error");
+    return null;
+  } finally { if (button) setBusy(button, false); }
+}
+
+exportQualityCheckBtn?.addEventListener("click", () => checkExportQuality(exportQualityCheckBtn, true));
+
+document.getElementById("export-btn")?.addEventListener("click", async () => {
+  await checkExportQuality(exportQualityCheckBtn, true);
+});
+
+document.getElementById("export-preview-confirm-btn")?.addEventListener("click", async (event) => {
+  const maxUses = Math.max(1, Math.min(10, Number(exportMaxPairUses?.value) || 2));
+  closeExportPreview();
+  await downloadExport(`/api/export?clean_repeated=1&max_pair_uses=${maxUses}`, event.currentTarget, document.getElementById("export-status"));
+});
+
+document.querySelectorAll("[data-close-export-preview]").forEach((el) => el.addEventListener("click", closeExportPreview));
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeExportPreview(); });
+
+document.getElementById("export-raw-btn")?.addEventListener("click", (event) => downloadExport("/api/export", event.currentTarget, document.getElementById("export-status")));
+
 document.getElementById("export-history-btn")?.addEventListener("click", () => {
   const tab = document.querySelector('.tab-btn[data-tab="label"]');
   if (tab) tab.click();

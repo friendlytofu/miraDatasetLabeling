@@ -213,11 +213,6 @@ export async function onRequestPost({ request, env }) {
     break;
   }
 
-  for (const e of inserted) {
-    const k = `${e.offerCount}x${e.wantCount}`;
-    bucketCounts[k] = (bucketCounts[k] || 0) + 1;
-  }
-
   const balancedTarget = hasProvenance && inserted.length > 0;
   const yes = balancedTarget ? classCounts.yes : null;
   const no = balancedTarget ? classCounts.no : null;
