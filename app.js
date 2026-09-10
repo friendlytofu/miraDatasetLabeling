@@ -353,6 +353,16 @@ document.getElementById("generate-btn").addEventListener("click", async (event) 
   try {
     const res = await api("/generate", { method: "POST", body: JSON.stringify({ count }) });
     setStatus(statusEl, res.exhausted ? `Generated ${res.generated} of ${res.requested} — the remaining unique combinations are running low.` : `Generated ${res.generated} new combinations.`, "success");
+    const balanceEl = document.getElementById("generate-balance");
+    if (balanceEl) {
+      if (res.balance?.available) {
+        balanceEl.textContent = `Estimated label balance: ${res.balance.yes} Yes / ${res.balance.no} No (${res.balance.yes_pct}% / ${res.balance.no_pct}%). Target: 40/60–50/50.`;
+        balanceEl.className = "status-line success";
+      } else {
+        balanceEl.textContent = "Balance estimate unavailable — the item bank needs source-phrase provenance to construct balanced Yes/No candidates.";
+        balanceEl.className = "status-line";
+      }
+    }
     document.getElementById("generated-total").textContent = res.generated;
     renderBucketGrid(res.bucketCounts);
     document.getElementById("metric-unlabeled").textContent = "…";
