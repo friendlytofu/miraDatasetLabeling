@@ -59,6 +59,38 @@
     </div>
   </section>
 
+  <section class="mission-dock" id="mission-dock" aria-label="Labeling mission">
+    <div class="mission-card card">
+      <div class="mission-flag-wrap">
+        <button id="mission-flag" class="mission-flag" type="button" title="Change mission flag" aria-label="Change mission flag">🏁</button>
+        <span class="mission-spark">✦</span>
+      </div>
+      <div class="mission-main">
+        <div class="mission-topline"><span class="section-kicker">YOUR LABELING MISSION</span><span id="mission-state" class="mission-state">No mission running</span></div>
+        <div class="mission-title-row">
+          <h3 id="mission-title">Set a goal and make a dent.</h3>
+          <button id="mission-edit-btn" class="btn-text" type="button">edit goal</button>
+        </div>
+        <div class="mission-progress-track"><div id="mission-progress-fill" class="mission-progress-fill"></div><span id="mission-progress-glow" class="mission-progress-glow"></span></div>
+        <div class="mission-progress-meta"><strong id="mission-progress-count">0 / 0</strong><span id="mission-progress-copy">Pick a goal to start.</span></div>
+        <div class="mission-controls" id="mission-controls" hidden>
+          <label class="mission-field"><span>Goal</span><input id="mission-goal" type="number" min="1" max="10000" value="100" inputmode="numeric" /></label>
+          <label class="mission-field"><span>Labeler</span><input id="mission-labeler" type="text" placeholder="Your name" autocomplete="name" /></label>
+          <div class="mission-flags" aria-label="Mission flags">
+            <button type="button" class="mission-flag-choice is-active" data-flag="🏁">🏁</button><button type="button" class="mission-flag-choice" data-flag="🚀">🚀</button><button type="button" class="mission-flag-choice" data-flag="⭐">⭐</button><button type="button" class="mission-flag-choice" data-flag="🪐">🪐</button><button type="button" class="mission-flag-choice" data-flag="⚡">⚡</button>
+          </div>
+          <button id="mission-run-btn" class="btn btn-primary" type="button"><span>Run mission</span><span class="btn-arrow">↗</span></button>
+          <button id="mission-save-preset-btn" class="btn btn-secondary" type="button">Save preset</button>
+        </div>
+        <div class="mission-bottom-row">
+          <div id="mission-presets" class="mission-presets"></div>
+          <button id="mission-history-btn" class="btn-text" type="button">mission history</button>
+        </div>
+        <div id="mission-history" class="mission-history" hidden></div>
+      </div>
+    </div>
+  </section>
+
   <!-- CREATE -->
   <section id="panel-create" class="panel is-active" role="tabpanel" aria-labelledby="tab-create">
     <div class="section-heading">
@@ -305,9 +337,6 @@
         <span>Labeler</span>
         <input id="labeler-name" type="text" placeholder="Your name" autocomplete="name" />
       </label>
-      <label class="checkbox toggle-line">
-        <input type="checkbox" id="translate-toggle" checked /> show Chinese translations
-      </label>
       <div class="progress-wrap">
         <div id="label-progress" class="progress-line">0 unlabeled · 0 total</div>
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
@@ -370,7 +399,7 @@
         <h2>Export the labeled dataset when the batch is ready.</h2>
         <p>Download one JSON object per line used by the training pipeline, with labels ordered by their saved timestamps.</p>
       </div>
-      <div class="section-badge">JSON · sequential IDs</div>
+      <div class="section-badge">JSONL · one record per line</div>
     </div>
     <div class="panel-grid export-grid">
       <div class="card feature-card">

@@ -1,4 +1,5 @@
 import { json, errorJson } from "../_utils.js";
+import { completeMissionIfNeeded } from "./missions.js";
 
 async function ensureHistoryTable(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS label_history (
@@ -30,7 +31,8 @@ export async function onRequestPost({ request, env }) {
     .bind(human_label, actor, labeledAt, id).run();
   await env.DB.prepare(`INSERT INTO label_history(entry_id, action, previous_label, new_label, labeler, acted_at, details) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, action, entry.human_label || null, human_label, actor, labeledAt, action === "changed" ? "Label changed during review" : "Initial label").run();
-  return json({ id, human_label, labeler: actor, labeled_blind: true, labeled_at: labeledAt, action });
+  const mission = await completeMissionIfNeeded(env);
+  return json({ id, human_label, labeler: actor, labeled_blind: true, labeled_at: labeledAt, action, mission_completed: !!mission?.completed_at });
 }
 
 export async function onRequestPut({ request, env }) {

@@ -87,10 +87,96 @@ async function activateTab(name) {
   if (name === "label") await loadNextEntry();
   if (name === "export") await loadExportStats();
   if (name === "create") await loadItems();
+  await loadMissions();
 }
 
 document.querySelectorAll(".tab-btn").forEach((btn) => btn.addEventListener("click", () => activateTab(btn.dataset.tab)));
 window.addEventListener("resize", () => moveTabIndicator(document.querySelector(".tab-btn.is-active")));
+
+// ---------- LABELING MISSION ----------
+const missionState = { flag: "🏁" };
+const missionFlagEl = document.getElementById("mission-flag");
+const missionGoalEl = document.getElementById("mission-goal");
+const missionLabelerEl = document.getElementById("mission-labeler");
+const missionControlsEl = document.getElementById("mission-controls");
+const missionHistoryEl = document.getElementById("mission-history");
+
+function missionDate(value) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+function renderMission(data = {}) {
+  const active = data.active;
+  const stats = data.stats || {};
+  const progress = active ? Number(active.progress || 0) : 0;
+  const goal = active ? Number(active.goal || 0) : Number(missionGoalEl?.value || 0);
+  const pct = goal ? Math.min(100, (progress / goal) * 100) : 0;
+  const fill = document.getElementById("mission-progress-fill");
+  if (fill) fill.style.width = `${pct}%`;
+  document.getElementById("mission-progress-count").textContent = active ? `${progress.toLocaleString()} / ${goal.toLocaleString()}` : "0 / 0";
+  document.getElementById("mission-progress-copy").textContent = active ? (active.remaining ? `${active.remaining.toLocaleString()} labels to go · started ${missionDate(active.started_at)}` : "Mission complete — nice work!") : "Pick a goal to start.";
+  document.getElementById("mission-state").textContent = active ? `${active.flag} in progress` : "No mission running";
+  document.getElementById("mission-title").textContent = active ? `${active.goal.toLocaleString()} labels. Keep the streak alive.` : "Set a goal and make a dent.";
+  missionFlagEl.textContent = active?.flag || missionState.flag || "🏁";
+  if (active) { missionGoalEl.value = active.goal; missionLabelerEl.value = active.labeler || labelerInput?.value || ""; missionState.flag = active.flag; }
+  document.getElementById("mission-progress-glow").style.left = `${Math.max(0, Math.min(99, pct))}%`;
+  document.getElementById("metric-unlabeled").textContent = String(stats.unlabeled ?? "—");
+}
+async function loadMissions() {
+  try {
+    const data = await api("/missions");
+    renderMission(data);
+    const presets = data.presets || [];
+    const presetsEl = document.getElementById("mission-presets");
+    presetsEl.innerHTML = presets.length ? `<span class="mission-presets-label">Saved:</span>${presets.slice(0,5).map(p => `<button class="mission-preset" type="button" data-preset-id="${p.id}" title="${escapeHtml(p.name)}">${escapeHtml(p.flag)} ${escapeHtml(p.name)} · ${Number(p.goal).toLocaleString()}</button>`).join("")}` : `<span class="mission-presets-label">No saved presets yet</span>`;
+    presetsEl.querySelectorAll("[data-preset-id]").forEach(btn => btn.addEventListener("click", () => {
+      const p = presets.find(x => String(x.id) === btn.dataset.presetId); if (!p) return;
+      missionGoalEl.value = p.goal; missionLabelerEl.value = p.labeler || labelerInput.value || ""; missionState.flag = p.flag; missionFlagEl.textContent = p.flag;
+      document.querySelectorAll(".mission-flag-choice").forEach(x => x.classList.toggle("is-active", x.dataset.flag === p.flag));
+      missionControlsEl.hidden = false;
+    }));
+    const historyEl = missionHistoryEl;
+    historyEl.innerHTML = (data.history || []).length ? (data.history || []).map(h => `<div class="mission-history-row"><div class="mission-history-flag">${escapeHtml(h.flag)}</div><div><strong>${Number(h.labels_completed).toLocaleString()} labels completed</strong><span>${escapeHtml(h.labeler || "Unknown")} · ${missionDate(h.completed_at)}</span></div><div class="mission-history-goal">Goal <strong>${Number(h.goal).toLocaleString()}</strong><small>${missionDate(h.started_at)} → ${missionDate(h.completed_at)}</small></div></div>`).join("") : `<div class="history-empty">No completed missions yet. Finish your first one and it will appear here.</div>`;
+  } catch (error) { showToast(error.message, "error"); }
+}
+
+document.getElementById("mission-edit-btn")?.addEventListener("click", () => { missionControlsEl.hidden = !missionControlsEl.hidden; missionGoalEl.focus(); });
+missionFlagEl?.addEventListener("click", () => { missionControlsEl.hidden = false; document.querySelector(".mission-flag-choice")?.focus(); });
+document.querySelectorAll(".mission-flag-choice").forEach(btn => btn.addEventListener("click", () => { missionState.flag = btn.dataset.flag; missionFlagEl.textContent = missionState.flag; document.querySelectorAll(".mission-flag-choice").forEach(x => x.classList.toggle("is-active", x === btn)); }));
+missionLabelerEl?.addEventListener("input", () => { if (labelerInput) labelerInput.value = missionLabelerEl.value; });
+
+document.getElementById("mission-run-btn")?.addEventListener("click", async (event) => {
+  const goal = Math.max(1, Math.min(10000, Number(missionGoalEl.value) || 100));
+  const labeler = String(missionLabelerEl.value || labelerInput.value || "").trim();
+  if (!labeler) { missionLabelerEl.focus(); showToast("Add your labeler name before starting the mission.", "error"); return; }
+  missionGoalEl.value = goal; labelerInput.value = labeler;
+  const button = event.currentTarget; setBusy(button, true, "Launching…");
+  try {
+    const started = await api("/missions", { method: "POST", body: JSON.stringify({ action: "start", goal, flag: missionState.flag, labeler }) });
+    const current = await api("/entries?status=unlabeled&limit=1");
+    if (Number(current.counts?.unlabeled || 0) < goal) {
+      const need = Math.min(1000, Math.max(1, goal - Number(current.counts?.unlabeled || 0)));
+      await api("/generate", { method: "POST", body: JSON.stringify({ count: need }) });
+    }
+    showToast(`${started.flag} Mission started — ${goal.toLocaleString()} labels.`, "success");
+    await loadMissions(); await activateTab("label");
+  } catch (error) { showToast(error.message, "error"); }
+  finally { setBusy(button, false); }
+});
+
+document.getElementById("mission-save-preset-btn")?.addEventListener("click", async () => {
+  const name = prompt("Name this mission preset:", `${missionGoalEl.value || 100} label sprint`);
+  if (!name) return;
+  try {
+    await api("/missions", { method: "POST", body: JSON.stringify({ action: "save-preset", name, goal: missionGoalEl.value, flag: missionState.flag, labeler: missionLabelerEl.value || labelerInput.value }) });
+    await loadMissions(); showToast("Mission preset saved.", "success");
+  } catch (error) { showToast(error.message, "error"); }
+});
+
+document.getElementById("mission-history-btn")?.addEventListener("click", () => {
+  missionHistoryEl.hidden = !missionHistoryEl.hidden;
+  document.getElementById("mission-history-btn").textContent = missionHistoryEl.hidden ? "mission history" : "hide history";
+});
 
 // ---------- helpers ----------
 function lowerFirst(s) {
@@ -435,19 +521,10 @@ async function renderEntry(entry) {
   const sharedTokens = crossCategorySharedTokens(entry);
   const offerHtml = highlightCrossCategory(entry.offers, sharedTokens);
   const wantHtml = highlightCrossCategory(entry.wants, sharedTokens);
-  const translate = document.getElementById("translate-toggle").checked;
-  let translations = {};
-  if (translate) {
-    const texts = [...new Set([...entry.offers, ...entry.wants])];
-    const res = await api("/translate", { method: "POST", body: JSON.stringify({ texts }) });
-    translations = res.translations || {};
-  }
-  const zh = (text) => translate && translations[text] ? `<div class="zh" lang="zh-CN">${escapeHtml(translations[text])}</div>` : "";
-  document.getElementById("entry-offers").innerHTML = entry.offers.map((text, i) => `<div class="entry-item"><div class="en">${offerHtml[i]}</div>${zh(text)}</div>`).join("");
-  document.getElementById("entry-wants").innerHTML = entry.wants.map((text, i) => `<div class="entry-item"><div class="en">${wantHtml[i]}</div>${zh(text)}</div>`).join("");
+  document.getElementById("entry-offers").innerHTML = entry.offers.map((text, i) => `<div class="entry-item"><div class="en">${offerHtml[i]}</div></div>`).join("");
+  document.getElementById("entry-wants").innerHTML = entry.wants.map((text, i) => `<div class="entry-item"><div class="en">${wantHtml[i]}</div></div>`).join("");
 }
 function escapeHtml(text) { return String(text).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
-document.getElementById("translate-toggle").addEventListener("change", () => currentEntry && renderEntry(currentEntry).catch((error) => showToast(error.message, "error")));
 
 document.getElementById("label-back-btn").addEventListener("click", async () => { if (labelIndex > 0) await showLabelEntry(labelEntries[labelIndex - 1], labelIndex - 1); });
 document.getElementById("label-forward-btn").addEventListener("click", async () => { if (labelIndex < labelEntries.length - 1) await showLabelEntry(labelEntries[labelIndex + 1], labelIndex + 1); });
@@ -459,7 +536,7 @@ document.getElementById("label-reset-btn").addEventListener("click", async () =>
   try {
     await api("/label", { method: "PUT", body: JSON.stringify({ id: currentEntry.id, labeler, acted_at: formatLocalISO(new Date()) }) });
     showToast(`Entry #${currentEntry.id} reset.`, "success");
-    await loadNextEntry(); await loadLabelHistory();
+    await loadNextEntry(); await loadLabelHistory(); await loadMissions();
   } catch (error) { showToast(error.message, "error"); }
 });
 
@@ -470,7 +547,7 @@ document.getElementById("label-delete-btn").addEventListener("click", async () =
   try {
     await api(`/label?id=${encodeURIComponent(currentEntry.id)}&labeler=${encodeURIComponent(labeler)}`, { method: "DELETE" });
     showToast(`Entry #${currentEntry.id} deleted.`, "success");
-    await loadNextEntry(); await loadLabelHistory();
+    await loadNextEntry(); await loadLabelHistory(); await loadMissions();
   } catch (error) { showToast(error.message, "error"); }
 });
 
@@ -485,7 +562,7 @@ async function labelCurrent(humanLabel) {
     await api("/label", { method: "POST", body: JSON.stringify({ id: currentEntry.id, human_label: humanLabel, labeler, labeled_at: formatLocalISO(new Date()) }) });
     await new Promise((resolve) => setTimeout(resolve, 150)); feedback.classList.remove("is-active");
     showToast(currentEntry.status === "labeled" ? `Entry #${currentEntry.id} updated.` : `Entry #${currentEntry.id} labeled.`, "success");
-    await loadNextEntry(); await loadLabelHistory();
+    await loadNextEntry(); await loadLabelHistory(); await loadMissions();
   } catch (error) { feedback.classList.remove("is-active"); showToast(error.message, "error"); }
   finally { labelingBusy = false; }
 }
@@ -922,6 +999,7 @@ const rippleStyle = document.createElement("style"); rippleStyle.textContent = "
 // ---------- bootstrap ----------
 (async function bootstrap() {
   moveTabIndicator(document.querySelector(".tab-btn.is-active"));
+loadMissions();
   await loadItems();
   await loadNextEntry();
 })();
